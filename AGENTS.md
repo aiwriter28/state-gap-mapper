@@ -18,7 +18,15 @@ Before continuing implementation:
 
 The plan checklist can lag the implementation. Resume from the progress file, not from unchecked
 boxes in the plan. Last updated on 2026-07-18: Tasks 1 through 12 are complete and review-clean;
-Task 13 is next. Confirm the progress file because this snapshot can become stale.
+Task 13 is in progress. Vercel preflight, environment setup, and the explicit `gpt-5.6-sol` /
+`medium` live API validation are complete. Integration, production deployment, production
+smoke/visual verification, and the public push remain. Confirm the progress file because this
+snapshot can become stale.
+
+## Claude compatibility
+
+`CLAUDE.md` is a symlink to this file. Edit `AGENTS.md` only; the symlink keeps Claude and Codex on
+the same continuation instructions. References to "claw.md" in conversation mean `CLAUDE.md`.
 
 ## Agent skills
 
