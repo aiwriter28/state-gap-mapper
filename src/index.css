@@ -253,7 +253,7 @@ textarea:focus-visible,
 .command-feedback { margin: 10px 0 0; border: 1px solid var(--faded); border-radius: 8px; padding: 9px 10px; color: var(--chalk); font-size: 0.78rem; line-height: 1.4; }
 .gap-scroll > .command-feedback { margin: 0 0 10px; }
 .gap-card, .structural-card, .suggested-card { overflow-wrap: anywhere; }
-.matrix-link { margin: 18px 10px; color: var(--faded); font-size: 0.875rem; }
+.matrix-link { display: block; margin: 18px auto; color: var(--faded); font-size: 0.875rem; }
 .gap-empty { display: grid; min-height: 100%; place-content: center; padding: 20px; color: var(--faded); font-size: 0.875rem; line-height: 1.45; text-align: center; }
 .dismissed-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; border: 1px solid var(--panel-strong); border-radius: 8px; padding: 8px 10px; color: var(--faded); }
 .dismissed-row .pair { color: var(--faded); font-size: 0.75rem; }
@@ -267,6 +267,20 @@ textarea:focus-visible,
 .accept-picker legend { margin-bottom: 7px; color: var(--faded); font-size: 0.72rem; }
 .picker-choice { display: flex; align-items: center; gap: 6px; color: var(--chalk); font-size: 0.8rem; }
 .picker-choice input { accent-color: var(--soft-blue); }
+
+.matrix-dialog { z-index: 40; width: min(820px, calc(100vw - 48px)); max-width: none; border: 1px solid var(--faded); border-radius: var(--radius); padding: 0; background: var(--blueprint-deep); color: var(--chalk); box-shadow: 0 24px 70px rgba(0, 0, 0, 0.52); }
+.matrix-dialog::backdrop { background: rgba(8, 18, 30, 0.72); }
+.matrix-dialog-content { padding: 22px; }
+.dialog-title { margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; }
+.dialog-copy { margin: 0 0 18px; color: var(--faded); font-size: 0.875rem; line-height: 1.45; }
+.matrix-wrap { max-height: 55vh; overflow: auto; }
+.matrix-table { width: 100%; border-collapse: collapse; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72rem; }
+.matrix-table th, .matrix-table td { min-width: 86px; border: 1px solid var(--panel-strong); padding: 9px; text-align: center; }
+.matrix-table th { color: var(--faded); font-weight: 400; }
+.matrix-table td.defined { background: var(--panel); color: var(--chalk); }
+.matrix-table td.hole { box-shadow: inset 0 0 0 1px var(--redline); color: var(--redline); }
+.matrix-table td.dismissed { color: var(--faded); text-decoration: line-through; }
+.matrix-table td.na { background: repeating-linear-gradient(135deg, transparent 0 5px, rgba(108, 137, 166, 0.06) 5px 6px); color: rgba(108, 137, 166, 0.65); }
 
 .stubs-drawer { position: relative; z-index: 10; display: grid; grid-template-rows: 49px minmax(0, 1fr); min-height: 0; border-top: 1px solid var(--panel-strong); background: rgba(12, 27, 44, 0.28); transition: grid-template-rows 180ms ease; }
 .stubs-drawer.collapsed { grid-template-rows: 49px 0; }

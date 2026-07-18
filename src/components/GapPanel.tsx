@@ -3,6 +3,11 @@ import { useStore } from "zustand";
 
 import type { HoleTarget } from "../../lib/commands";
 import { holeEvidence, type DisplayHole, type Machine, type MissingTransition } from "../../lib/machine";
+import {
+  selectActiveGapCount,
+  stateEventMatrix,
+  type MatrixCellStatus,
+} from "../../lib/selectors";
 import { GapIcon } from "./Icons";
 import { appStore } from "../store";
 
@@ -198,6 +203,109 @@ function StructuralStateCard({ machine, stateId }: { machine: Machine; stateId: 
   );
 }
 
+const MATRIX_CELL_COPY: Record<MatrixCellStatus, string> = {
+  defined: "defined",
+  "not-applicable": "not applicable",
+  dismissed: "dismissed",
+  hole: "Missing Transition",
+};
+
+const MATRIX_CELL_VISIBLE_COPY: Record<MatrixCellStatus, string> = {
+  defined: "drawn",
+  "not-applicable": "n/a",
+  dismissed: "dismissed",
+  hole: "hole",
+};
+
+function MatrixDialog({
+  machine,
+  dismissedPairKeys,
+  onClose,
+}: {
+  machine: Machine;
+  dismissedPairKeys: ReadonlySet<string>;
+  onClose: () => void;
+}) {
+  const rows = useMemo(
+    () => stateEventMatrix(machine, dismissedPairKeys),
+    [dismissedPairKeys, machine],
+  );
+  const states = useMemo(
+    () => new Map(machine.states.map((state) => [state.id, state])),
+    [machine.states],
+  );
+  const events = useMemo(
+    () => new Map(machine.events.map((event) => [event.id, event])),
+    [machine.events],
+  );
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    return () => {
+      if (dialog.open && typeof dialog.close === "function") dialog.close();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="matrix-dialog"
+      aria-labelledby="matrix-dialog-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      <div className="matrix-dialog-content">
+        <h2 className="dialog-title" id="matrix-dialog-title">State x event matrix</h2>
+        <p className="dialog-copy">Every undefined pair remains visible. Final-state cells are not applicable.</p>
+        <div className="matrix-wrap">
+          <table className="matrix-table">
+            <thead>
+              <tr>
+                <th scope="col">state</th>
+                {machine.events.map((event) => <th scope="col" key={event.id}>{event.id}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.stateId}>
+                  <th scope="row">{row.stateId}</th>
+                  {row.cells.map((cell) => {
+                    const stateName = states.get(cell.stateId)?.name ?? cell.stateId;
+                    const eventName = events.get(cell.eventId)?.name ?? cell.eventId;
+                    const className = cell.status === "not-applicable" ? "na" : cell.status;
+                    return (
+                      <td
+                        className={className}
+                        aria-label={`${stateName}, ${eventName}: ${MATRIX_CELL_COPY[cell.status]}`}
+                        title={`${stateName} x ${eventName}: ${MATRIX_CELL_COPY[cell.status]}`}
+                        key={cell.eventId}
+                      >
+                        {MATRIX_CELL_VISIBLE_COPY[cell.status]}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="dialog-actions">
+          <button className="dialog-button primary" type="button" autoFocus onClick={onClose}>Close matrix</button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
 export function GapPanel() {
   const machine = useStore(appStore, (state) => state.machine);
   const gaps = useStore(appStore, (state) => state.gaps);
@@ -216,10 +324,9 @@ export function GapPanel() {
   const rankError = useStore(appStore, (state) => state.rankError);
   const rankTruncated = useStore(appStore, (state) => state.rankTruncated);
   const suggestedEvents = useStore(appStore, (state) => state.suggestedEvents);
+  const totalGaps = useStore(appStore, selectActiveGapCount);
   const [acceptingHole, setAcceptingHole] = useState<MissingTransition | null>(null);
-  const totalGaps = useMemo(() => (
-    displayHoles.length + new Set([...gaps.unreachableStateIds, ...gaps.deadEndStateIds]).size
-  ), [displayHoles.length, gaps.deadEndStateIds, gaps.unreachableStateIds]);
+  const [matrixOpen, setMatrixOpen] = useState(false);
   const dismissedHoles = useMemo(() => {
     if (machine === null) return [];
     const stateIds = new Set(machine.states.map((state) => state.id));
@@ -312,7 +419,9 @@ export function GapPanel() {
             </>
           ) : null}
 
-          {displayHoles.length > 0 ? <p className="matrix-link">Show all {displayHoles.length} undefined pairs</p> : null}
+          <button className="quiet-button matrix-link" type="button" onClick={() => setMatrixOpen(true)}>
+            Show all {gaps.missingTransitions.length} undefined pairs
+          </button>
         </div>
       )}
       {machine !== null && acceptingHole !== null ? (
@@ -322,6 +431,13 @@ export function GapPanel() {
           onAccept={(target) => acceptHole(acceptingHole, target).ok}
           onClose={closePicker}
           errorMessage={commandError?.message ?? null}
+        />
+      ) : null}
+      {machine !== null && matrixOpen ? (
+        <MatrixDialog
+          machine={machine}
+          dismissedPairKeys={dismissedPairKeys}
+          onClose={() => setMatrixOpen(false)}
         />
       ) : null}
     </section>

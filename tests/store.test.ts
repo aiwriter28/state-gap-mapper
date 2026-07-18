@@ -7,6 +7,7 @@ import { computeGaps } from "../lib/gaps";
 import { addTransition, deleteTransition } from "../lib/commands";
 import type { Machine, SuggestedEvent } from "../lib/machine";
 import { splitSpec } from "../lib/sentences";
+import { selectActiveGapCount } from "../lib/selectors";
 import {
   createAppStore,
   type ExtractionResponse,
@@ -394,6 +395,19 @@ describe("editable machine store", () => {
     store.setState({ sessionSeq: 2 });
     store.getState().applyExtraction(orderResponse, 2, orderSpec);
     expect(store.getState().dismissedPairKeys.size).toBe(0);
+  });
+
+  test("active gap count decreases on dismiss and returns on undo", () => {
+    const store = createAppStore(fakeClient());
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+    const hole = { stateId: "processing", eventId: "cancel" };
+
+    expect(selectActiveGapCount(store.getState())).toBe(10);
+    store.getState().dismissHole(hole);
+    expect(selectActiveGapCount(store.getState())).toBe(9);
+    store.getState().undoDismiss(hole);
+    expect(selectActiveGapCount(store.getState())).toBe(10);
   });
 
   test("accepting an expiry Suggested Event adds exactly three new Missing Transitions and records provenance", () => {

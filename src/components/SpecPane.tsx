@@ -4,6 +4,7 @@ import { useStore } from "zustand";
 import accountSpec from "../../samples/account-signup.txt?raw";
 import documentSpec from "../../samples/document-approval.txt?raw";
 import orderSpec from "../../samples/order-checkout.txt?raw";
+import { uncoveredSentences } from "../../lib/selectors";
 import { SpecIcon } from "./Icons";
 import { appStore } from "../store";
 
@@ -30,15 +31,11 @@ export function SpecPane() {
   const cancelReplacement = useStore(appStore, (state) => state.cancelReplacement);
   const [editing, setEditing] = useState(false);
 
-  const covered = useMemo(() => {
-    const refs = new Set<number>();
-    if (machine !== null) {
-      for (const state of machine.states) state.evidence.forEach((index) => refs.add(index));
-      for (const event of machine.events) event.evidence.forEach((index) => refs.add(index));
-      for (const transition of machine.transitions) transition.evidence.forEach((index) => refs.add(index));
-    }
-    return refs;
-  }, [machine]);
+  const uncovered = useMemo(() => new Set(
+    machine === null
+      ? sentences.map((sentence) => sentence.index)
+      : uncoveredSentences(machine, sentences.length),
+  ), [machine, sentences]);
 
   const showEditor = machine === null || editing || viabilityRefusal !== null;
   const isExtracting = phase === "extracting";
@@ -122,13 +119,13 @@ export function SpecPane() {
           <div className="sentence-list">
             {sentences.map((sentence) => {
               const selected = highlightedEvidence.includes(sentence.index);
-              const uncovered = !covered.has(sentence.index);
+              const isUncovered = uncovered.has(sentence.index);
               return (
                 <div
-                  className={`sentence${selected ? " selected" : ""}${uncovered ? " uncovered" : ""}`}
+                  className={`sentence${selected ? " selected" : ""}${isUncovered ? " uncovered" : ""}`}
                   key={sentence.index}
                   data-sentence={sentence.index}
-                  title={uncovered ? "This sentence did not map to any state, event, or transition." : undefined}
+                  title={isUncovered ? "This sentence did not map to any state, event, or transition." : undefined}
                 >
                   <span className="sentence-number">{sentence.index}</span>
                   <span>{sentence.text}</span>
@@ -137,7 +134,7 @@ export function SpecPane() {
             })}
           </div>
           <div className="spec-meta">
-            <div className="coverage">{covered.size} of {sentences.length} sentences mapped</div>
+            <div className="coverage">{sentences.length - uncovered.size} of {sentences.length} sentences mapped</div>
             <div className="sample-chips" aria-label="Sample specs">
               {samples.map((sample) => (
                 <button className="chip" type="button" key={sample.label} onClick={() => chooseSample(sample.spec)}>
