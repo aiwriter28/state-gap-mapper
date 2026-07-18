@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
 
 import { apiError } from "../lib/errors";
+import { computeGaps } from "../lib/gaps";
 import type { Machine } from "../lib/machine";
 import { splitSpec } from "../lib/sentences";
 import {
@@ -152,11 +153,13 @@ describe("extraction store", () => {
   test("not_spec sets refusal and preserves any prior successful machine and artifacts", async () => {
     const good = deferred<ExtractionResponse>();
     const refused = deferred<ExtractionResponse>();
-    const store = createAppStore(fakeClient(good, refused));
+    const client = fakeClient(good, refused);
+    const store = createAppStore(client);
     store.getState().setDraftSpec(orderSpec);
     const initialExtract = store.getState().extract();
     good.resolve(orderResponse);
     await initialExtract;
+    expect(client.rank).toHaveBeenCalledTimes(1);
     store.setState({
       ranks: [{
         stateId: "processing",
@@ -204,6 +207,7 @@ describe("extraction store", () => {
       error: null,
     });
     expect(store.getState().dismissedPairKeys).toEqual(before.dismissedPairKeys);
+    expect(client.rank).toHaveBeenCalledTimes(1);
   });
 
   test("first not_spec response sets refusal while machine remains null", async () => {
@@ -431,16 +435,84 @@ describe("deferred rank store", () => {
     expect(store.getState().suggestedEvents).toEqual([]);
   });
 
-  test("machine revision guard discards rank metadata after an edit", () => {
-    const store = createAppStore(fakeClient());
-    store.setState({ sessionSeq: 1, draftSpec: orderSpec, rankSeq: 3 });
+  test("rank after an edit applies only ranks for authoritative surviving holes", async () => {
+    const extraction = deferred<ExtractionResponse>();
+    const ranking = deferred<RankResponse>();
+    const store = createAppStore({
+      extract: vi.fn(() => extraction.promise),
+      rank: vi.fn(() => ranking.promise),
+    });
+    store.getState().setDraftSpec(orderSpec);
+    const submitted = store.getState().extract();
+    extraction.resolve(orderResponse);
+    await submitted;
+
+    const editedMachine: Machine = {
+      ...orderMachine,
+      transitions: [
+        ...orderMachine.transitions,
+        { from: "processing", event: "cancel", to: "cancelled", evidence: [5], userAdded: true },
+      ],
+    };
+    const editedGaps = computeGaps(editedMachine);
+    const revisionBeforeEdit = store.getState().machineRev;
+    store.setState({
+      machine: editedMachine,
+      gaps: editedGaps,
+      displayHoles: editedGaps.missingTransitions.map((hole) => ({ ...hole, rank: null })),
+      machineRev: revisionBeforeEdit + 1,
+    });
+
+    ranking.resolve({
+      ...rankResponse,
+      rankedHoles: [
+        {
+          stateId: "cart",
+          eventId: "payment_succeeded",
+          relevance: 0.8,
+          rationale: "Payment success needs a destination from Cart.",
+          suggestedTargetStateId: "paid",
+        },
+        rankResponse.rankedHoles[0],
+      ],
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.getState().displayHoles.find(
+      (hole) => hole.stateId === "cart" && hole.eventId === "payment_succeeded",
+    )?.rank?.relevance).toBe(0.8);
+    expect(store.getState().displayHoles.find(
+      (hole) => hole.stateId === "processing" && hole.eventId === "cancel",
+    )).toBeUndefined();
+    expect(store.getState().suggestedEvents).toEqual([]);
+  });
+
+  test("same-session reranks keep the second result when it resolves before the first", async () => {
+    const first = deferred<RankResponse>();
+    const second = deferred<RankResponse>();
+    let rankCall = 0;
+    const store = createAppStore({
+      extract: vi.fn(),
+      rank: vi.fn(() => [first, second][rankCall++].promise),
+    });
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
     store.getState().applyExtraction(orderResponse, 1, orderSpec);
-    const machineRevBeforeEdit = store.getState().machineRev;
-    store.setState({ machineRev: machineRevBeforeEdit + 1 });
 
-    store.getState().applyRank(rankResponse, 1, 3, machineRevBeforeEdit);
+    const firstRerank = store.getState().rank();
+    const secondRerank = store.getState().rank();
+    second.resolve({
+      ...rankResponse,
+      rankedHoles: [{ ...rankResponse.rankedHoles[0], relevance: 0.8 }],
+    });
+    await secondRerank;
+    first.reject(apiError("upstream_failure", "First result is stale."));
+    await firstRerank;
 
-    expect(store.getState().ranks).toEqual([]);
-    expect(store.getState().displayHoles.every((hole) => hole.rank === null)).toBe(true);
+    expect(store.getState().ranks).toEqual([
+      expect.objectContaining({ stateId: "processing", eventId: "cancel", relevance: 0.8 }),
+    ]);
+    expect(store.getState().rankError).toBeNull();
+    expect(store.getState().rankPending).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
 import { computeGaps } from "../lib/gaps";
+import { gapCount } from "../lib/gapCount";
 import { holeEvidence, type Machine } from "../lib/machine";
 import orderCheckout from "./fixtures/order-checkout.machine.json";
 
@@ -59,6 +60,12 @@ test("synthetic topology: exact unreachable and dead-end sets", () => {
 
   expect(gaps.unreachableStateIds).toEqual(["orphan", "sink"]);
   expect(gaps.deadEndStateIds).toEqual(["sink"]);
+});
+
+test("gap total counts each structurally affected state once across unreachable and dead-end categories", () => {
+  const gaps = computeGaps(synthetic);
+
+  expect(gapCount(gaps)).toBe(gaps.missingTransitions.length + 2);
 });
 
 test("final states contribute no rows", () => {

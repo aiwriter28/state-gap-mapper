@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useStore } from "zustand";
 
+import { gapCount } from "../../lib/gapCount";
 import { holeEvidence, type DisplayHole, type Machine, type MissingTransition } from "../../lib/machine";
 import { GapIcon } from "./Icons";
 import { appStore } from "../store";
@@ -85,16 +86,13 @@ export function GapPanel() {
   const rankError = useStore(appStore, (state) => state.rankError);
   const rankTruncated = useStore(appStore, (state) => state.rankTruncated);
   const suggestedEvents = useStore(appStore, (state) => state.suggestedEvents);
-  const gapCount = useMemo(
-    () => gaps.missingTransitions.length + gaps.unreachableStateIds.length + gaps.deadEndStateIds.length,
-    [gaps],
-  );
+  const totalGaps = useMemo(() => gapCount(gaps), [gaps]);
 
   return (
     <section className="pane gaps-pane" aria-labelledby="gaps-heading">
       <h2 className="pane-header" id="gaps-heading">
         <GapIcon className="pane-icon" />
-        Gaps ({gapCount})
+        Gaps ({totalGaps})
         <button
           className="quiet-button header-action"
           type="button"

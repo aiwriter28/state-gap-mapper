@@ -195,7 +195,7 @@ function stateCreator(client: LlmClient) {
         const payload = await client.extract(submittedSpec);
         if (seq !== get().sessionSeq) return;
         get().applyExtraction(payload, seq, submittedSpec);
-        if (get().sessionSeq === seq && get().machine !== null) {
+        if (payload.kind === "machine" && get().sessionSeq === seq && get().machine !== null) {
           void get().rank();
         }
       } catch (error) {
@@ -222,8 +222,7 @@ function stateCreator(client: LlmClient) {
         const current = get();
         if (
           current.sessionSeq !== sessionSeq ||
-          current.rankSeq !== rankSeq ||
-          current.machineRev !== machineRev
+          current.rankSeq !== rankSeq
         ) {
           return;
         }
@@ -232,18 +231,18 @@ function stateCreator(client: LlmClient) {
         const current = get();
         if (
           current.sessionSeq !== sessionSeq ||
-          current.rankSeq !== rankSeq ||
-          current.machineRev !== machineRev
+          current.rankSeq !== rankSeq
         ) {
           return;
         }
-        set({ rankError: normalizeClientError(error) });
+        if (current.machineRev === machineRev) {
+          set({ rankError: normalizeClientError(error) });
+        }
       } finally {
         const current = get();
         if (
           current.sessionSeq === sessionSeq &&
-          current.rankSeq === rankSeq &&
-          current.machineRev === machineRev
+          current.rankSeq === rankSeq
         ) {
           set({ rankPending: false });
         }
@@ -255,12 +254,12 @@ function stateCreator(client: LlmClient) {
       if (
         current.machine === null ||
         current.sessionSeq !== sessionSeq ||
-        current.rankSeq !== rankSeq ||
-        current.machineRev !== machineRev
+        current.rankSeq !== rankSeq
       ) {
         return;
       }
 
+      const revisionChanged = current.machineRev !== machineRev;
       const gaps = computeGaps(current.machine);
       const displayHoles = orderDisplayHoles(mergeRanks(
         gaps.missingTransitions,
@@ -270,9 +269,9 @@ function stateCreator(client: LlmClient) {
       set({
         gaps,
         ranks: displayHoles.flatMap((hole) => hole.rank === null ? [] : [hole.rank]),
-        suggestedEvents: payload.suggestedEvents,
+        suggestedEvents: revisionChanged ? [] : payload.suggestedEvents,
         displayHoles,
-        rankTruncated: payload.truncated,
+        rankTruncated: revisionChanged ? false : payload.truncated,
         rankError: null,
       });
     },
