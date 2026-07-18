@@ -54,6 +54,13 @@ export interface MissingTransition {
   eventId: string;
 }
 
+export function holeEvidence(machine: Machine, hole: MissingTransition): number[] {
+  const stateEvidence = machine.states.find((state) => state.id === hole.stateId)?.evidence ?? [];
+  const eventEvidence = machine.events.find((event) => event.id === hole.eventId)?.evidence ?? [];
+
+  return [...new Set([...stateEvidence, ...eventEvidence])].sort((left, right) => left - right);
+}
+
 export interface Gaps {
   missingTransitions: MissingTransition[];
   unreachableStateIds: string[];
