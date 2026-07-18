@@ -13,6 +13,9 @@ export const DOMAIN_LIMITS = {
   transitions: 200,
   suggestions: 10,
   rankedHoles: 100,
+  sentences: 4_000,
+  sentenceText: 4_000,
+  opSpecCharacters: 65_536,
 } as const;
 
 export interface MachineState {

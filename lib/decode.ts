@@ -100,10 +100,14 @@ function integer(value: unknown, path: string): number {
   return decoded;
 }
 
-function nonNegativeInteger(value: unknown, path: string): number {
+function boundedNonNegativeInteger(
+  value: unknown,
+  path: string,
+  maxValue: number,
+): number {
   const decoded = integer(value, path);
-  if (decoded < 0) {
-    return fail(path, "Expected a non-negative integer.");
+  if (decoded < 0 || decoded > maxValue) {
+    return fail(path, `Expected an integer from 0 through ${maxValue}.`);
   }
   return decoded;
 }
@@ -302,12 +306,16 @@ function sentences(value: unknown, path: string): Sentence[] {
   const decoded = array(
     value,
     path,
-    Number.MAX_SAFE_INTEGER,
+    DOMAIN_LIMITS.sentences,
     (item, itemPath): Sentence => {
       const record = object(item, itemPath, ["index", "text"]);
       return {
         index: integer(record.index, `${itemPath}.index`),
-        text: string(record.text, `${itemPath}.text`),
+        text: string(
+          record.text,
+          `${itemPath}.text`,
+          DOMAIN_LIMITS.sentenceText,
+        ),
       };
     },
   );
@@ -358,9 +366,10 @@ const cachedSample: Decoder<CachedSample> = (value, path) => {
     machine: machine(record.machine, `${path}.machine`, false),
     ...decodedRank,
     truncated: boolean(record.truncated, `${path}.truncated`),
-    droppedSuggestions: nonNegativeInteger(
+    droppedSuggestions: boundedNonNegativeInteger(
       record.droppedSuggestions,
       `${path}.droppedSuggestions`,
+      DOMAIN_LIMITS.suggestions,
     ),
   };
 };
@@ -373,7 +382,14 @@ const opEnvelope: Decoder<OpEnvelope> = (value, path) => {
   if (op === "rank") return rankRequest(value, path);
   if (op === "extract") {
     const record = object(value, path, ["op", "spec"]);
-    return { op: "extract", spec: string(record.spec, `${path}.spec`) };
+    return {
+      op: "extract",
+      spec: string(
+        record.spec,
+        `${path}.spec`,
+        DOMAIN_LIMITS.opSpecCharacters,
+      ),
+    };
   }
   return fail(`${path}.op`, 'Expected "extract" or "rank".');
 };

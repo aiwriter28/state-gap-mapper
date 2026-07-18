@@ -210,7 +210,7 @@ describe("validateMachineShape", () => {
       code,
       subject,
     }));
-    expect(identities).toContainEqual(expected);
+    expect(identities).toEqual([expected]);
   });
 
   test("accepts a valid flat machine", () => {
@@ -346,7 +346,7 @@ describe("validateExtraction", () => {
       code,
       subject,
     }));
-    expect(identities).toContainEqual(expected);
+    expect(identities).toEqual([expected]);
   });
 
   test.each(extractionPassingFixtures)("accepts $name", ({ output, sentenceCount }) => {
@@ -455,7 +455,7 @@ describe("validateRankOutput", () => {
       code,
       subject,
     }));
-    expect(identities).toContainEqual(expected);
+    expect(identities).toEqual([expected]);
   });
 
   test.each(rankPassingFixtures)("accepts $name", ({ output }) => {
@@ -463,12 +463,116 @@ describe("validateRankOutput", () => {
   });
 });
 
-test("the complete semantic validation matrix contains exactly 25 fixtures", () => {
-  expect(
-    machineInvalidFixtures.length +
-      extractionInvalidFixtures.length +
-      extractionPassingFixtures.length +
-      rankInvalidFixtures.length +
-      rankPassingFixtures.length,
-  ).toBe(25);
+test("the complete semantic matrix equals the independent literal 25-fixture inventory", () => {
+  const constructedInventory = [
+    ...machineInvalidFixtures.map(({ name, expected }) => ({ name, ...expected })),
+    ...extractionInvalidFixtures.map(({ name, expected }) => ({ name, ...expected })),
+    ...extractionPassingFixtures.map(({ name }) => ({
+      name,
+      code: null,
+      subject: null,
+    })),
+    ...rankInvalidFixtures.map(({ name, expected }) => ({ name, ...expected })),
+    ...rankPassingFixtures.map(({ name }) => ({
+      name,
+      code: null,
+      subject: null,
+    })),
+  ];
+
+  expect(constructedInventory).toEqual([
+    { name: "zero initial states", code: "initial_count", subject: "states" },
+    { name: "two initial states", code: "initial_count", subject: "states" },
+    { name: "duplicate state id", code: "dup_id", subject: "states[1].id" },
+    { name: "blank id", code: "blank_id", subject: "states[0].id" },
+    {
+      name: "id outside canonical charset",
+      code: "bad_id_charset",
+      subject: "states[0].id",
+    },
+    { name: "blank name", code: "blank_name", subject: "states[0].name" },
+    {
+      name: "dangling transition target",
+      code: "dangling_ref",
+      subject: "transitions[0].to",
+    },
+    {
+      name: "nondeterministic state-event pair",
+      code: "nondeterministic",
+      subject: "transitions[1]",
+    },
+    {
+      name: "outgoing transition from final state",
+      code: "final_outgoing",
+      subject: "transitions[0].from",
+    },
+    { name: "31 states", code: "too_large", subject: "states" },
+    { name: "31 events", code: "too_large", subject: "events" },
+    { name: "201 transitions", code: "too_large", subject: "transitions" },
+    {
+      name: "evidence index zero",
+      code: "evidence_range",
+      subject: "states[0].evidence[0]",
+    },
+    {
+      name: "evidence index above the Sentence count",
+      code: "evidence_range",
+      subject: "events[0].evidence[0]",
+    },
+    {
+      name: "empty Evidence on a model-derived element",
+      code: "no_evidence",
+      subject: "states[0].evidence",
+    },
+    {
+      name: "empty surface form list",
+      code: "bad_surface_forms",
+      subject: "events[0].surfaceForms",
+    },
+    {
+      name: "blank surface form",
+      code: "bad_surface_forms",
+      subject: "events[0].surfaceForms[0]",
+    },
+    {
+      name: "duplicate surface form",
+      code: "bad_surface_forms",
+      subject: "events[0].surfaceForms[1]",
+    },
+    {
+      name: "blank viability rationale",
+      code: "bad_rationale",
+      subject: "viability.reason",
+    },
+    {
+      name: "user-added element with empty Evidence",
+      code: null,
+      subject: null,
+    },
+    {
+      name: "collision between two Suggested Events",
+      code: "suggested_collision",
+      subject: "suggestedEvents[1].id",
+    },
+    {
+      name: "confidence below zero",
+      code: "bad_confidence",
+      subject: "suggestedEvents[0].confidence",
+    },
+    {
+      name: "confidence above one",
+      code: "bad_confidence",
+      subject: "suggestedEvents[0].confidence",
+    },
+    {
+      name: "blank rank rationale",
+      code: "bad_rationale",
+      subject: "rankedHoles[0].rationale",
+    },
+    {
+      name: "Suggested Event id matching a machine event id",
+      code: null,
+      subject: null,
+    },
+  ]);
 });

@@ -75,6 +75,10 @@ function expectDecodeError(value: unknown, path: string) {
   expect(value).toMatchObject({ ok: false, path });
 }
 
+function expectDecodeSuccess(value: unknown) {
+  expect(value).not.toMatchObject({ ok: false });
+}
+
 describe("decodeExtractionOutput", () => {
   test.each([
     ["null root", null, "$"],
@@ -108,60 +112,6 @@ describe("decodeExtractionOutput", () => {
         },
       };
     })(), "$.machine.events[0].evidence[0]"],
-    ["unexpected extraction field", { ...extractionFixture(), extra: true }, "$"],
-    ["unexpected userAdded from model", (() => {
-      const value = extractionFixture();
-      return {
-        ...value,
-        machine: {
-          ...value.machine,
-          states: [{ ...value.machine.states[0], userAdded: false }],
-        },
-      };
-    })(), "$.machine.states[0]"],
-    ["65-character id", (() => {
-      const value = extractionFixture();
-      return {
-        ...value,
-        machine: {
-          ...value.machine,
-          states: [{ ...value.machine.states[0], id: "x".repeat(65) }],
-        },
-      };
-    })(), "$.machine.states[0].id"],
-    ["21 evidence entries", (() => {
-      const value = extractionFixture();
-      return {
-        ...value,
-        machine: {
-          ...value.machine,
-          states: [{ ...value.machine.states[0], evidence: Array(21).fill(1) }],
-        },
-      };
-    })(), "$.machine.states[0].evidence"],
-    ["11 surface forms", (() => {
-      const value = extractionFixture();
-      return {
-        ...value,
-        machine: {
-          ...value.machine,
-          events: [{ ...value.machine.events[0], surfaceForms: Array(11).fill("starts") }],
-        },
-      };
-    })(), "$.machine.events[0].surfaceForms"],
-    ["31 states", (() => {
-      const value = extractionFixture();
-      return {
-        ...value,
-        machine: {
-          ...value.machine,
-          states: Array.from({ length: 31 }, (_, index) => ({
-            ...value.machine.states[0],
-            id: `state_${index}`,
-          })),
-        },
-      };
-    })(), "$.machine.states"],
   ])("rejects %s", (_label, value, path) => {
     expectDecodeError(decodeExtractionOutput(value), path);
   });
@@ -174,13 +124,6 @@ describe("decodeExtractionOutput", () => {
 describe("decodeRankOutput", () => {
   test.each([
     ["missing ranked holes", { suggestedEvents: [] }, "$.rankedHoles"],
-    ["301-character rationale", (() => {
-      const value = rankOutputFixture();
-      return {
-        ...value,
-        rankedHoles: [{ ...value.rankedHoles[0], rationale: "r".repeat(301) }],
-      };
-    })(), "$.rankedHoles[0].rationale"],
     ["non-finite relevance", (() => {
       const value = rankOutputFixture();
       return {
@@ -195,33 +138,6 @@ describe("decodeRankOutput", () => {
         rankedHoles: [{ ...value.rankedHoles[0], suggestedTargetStateId: false }],
       };
     })(), "$.rankedHoles[0].suggestedTargetStateId"],
-    ["101 ranked holes", (() => {
-      const value = rankOutputFixture();
-      return {
-        ...value,
-        rankedHoles: Array.from({ length: 101 }, (_, index) => ({
-          ...value.rankedHoles[0],
-          eventId: `event_${index}`,
-        })),
-      };
-    })(), "$.rankedHoles"],
-    ["11 suggestions", (() => {
-      const value = rankOutputFixture();
-      return {
-        ...value,
-        suggestedEvents: Array.from({ length: 11 }, (_, index) => ({
-          ...value.suggestedEvents[0],
-          id: `suggestion_${index}`,
-        })),
-      };
-    })(), "$.suggestedEvents"],
-    ["unexpected suggestion field", (() => {
-      const value = rankOutputFixture();
-      return {
-        ...value,
-        suggestedEvents: [{ ...value.suggestedEvents[0], evidence: [1] }],
-      };
-    })(), "$.suggestedEvents[0]"],
   ])("rejects %s", (_label, value, path) => {
     expectDecodeError(decodeRankOutput(value), path);
   });
@@ -238,43 +154,6 @@ describe("decodeRankRequest", () => {
     const value = rankRequestFixture();
     value.sentences = [{ index: 2, text: "The system starts." }];
     expectDecodeError(decodeRankRequest(value), "$.sentences[0].index");
-  });
-
-  test.each([
-    ["31 events", (() => {
-      const value = rankRequestFixture();
-      return {
-        ...value,
-        machine: {
-          ...value.machine,
-          events: Array.from({ length: 31 }, (_, index) => ({
-            ...value.machine.events[0],
-            id: `event_${index}`,
-          })),
-        },
-      };
-    })(), "$.machine.events"],
-    ["201 transitions", (() => {
-      const value = rankRequestFixture();
-      return {
-        ...value,
-        machine: {
-          ...value.machine,
-          transitions: Array.from({ length: 201 }, () => ({
-            from: "idle",
-            event: "start",
-            to: "idle",
-            evidence: [1],
-          })),
-        },
-      };
-    })(), "$.machine.transitions"],
-    ["unexpected caller-supplied holes", {
-      ...rankRequestFixture(),
-      holes: [{ stateId: "idle", eventId: "start" }],
-    }, "$"],
-  ])("rejects %s", (_label, value, path) => {
-    expectDecodeError(decodeRankRequest(value), path);
   });
 
   test("accepts caller-owned userAdded fields without weakening strict objects", () => {
@@ -306,7 +185,6 @@ describe("decodeCachedSample", () => {
         { index: 3, text: "Third." },
       ],
     }, "$.sentences[1].index"],
-    ["unexpected cache field", { ...cachedSampleFixture(), generatedAt: "today" }, "$"],
     ["negative dropped count", {
       ...cachedSampleFixture(),
       droppedSuggestions: -1,
@@ -332,16 +210,381 @@ describe("decodeOpEnvelope", () => {
     expect(decodeOpEnvelope(rankRequestFixture())).toEqual(rankRequestFixture());
   });
 
+  test("accepts 4,001 Spec characters so Task 5 can return too_long", () => {
+    const value = { op: "extract" as const, spec: "x".repeat(4_001) };
+    expect(decodeOpEnvelope(value)).toEqual(value);
+  });
+
   test.each([
     ["unknown operation", { op: "delete", spec: "A system starts." }, "$.op"],
     ["missing operation", { spec: "A system starts." }, "$.op"],
-    ["extra extract field", { op: "extract", spec: "A system starts.", extra: 1 }, "$"],
   ])("rejects %s", (_label, value, path) => {
     expectDecodeError(decodeOpEnvelope(value), path);
   });
+});
 
-  test("leaves malformed JSON handling to the caller", () => {
-    expect(() => JSON.parse('{"op":"extract"')).toThrow(SyntaxError);
+const extractionWithStates = (length: number) => {
+  const value = extractionFixture();
+  return {
+    ...value,
+    machine: {
+      ...value.machine,
+      states: Array.from({ length }, (_, index) => ({
+        ...value.machine.states[0],
+        id: `state_${index}`,
+      })),
+    },
+  };
+};
+
+const extractionWithEvents = (length: number) => {
+  const value = extractionFixture();
+  return {
+    ...value,
+    machine: {
+      ...value.machine,
+      events: Array.from({ length }, (_, index) => ({
+        ...value.machine.events[0],
+        id: `event_${index}`,
+      })),
+    },
+  };
+};
+
+const extractionWithTransitions = (length: number) => {
+  const value = extractionFixture();
+  return {
+    ...value,
+    machine: {
+      ...value.machine,
+      transitions: Array.from({ length }, () => ({
+        from: "idle",
+        event: "start",
+        to: "idle",
+        evidence: [1],
+      })),
+    },
+  };
+};
+
+const rankOutputWithSuggestions = (length: number) => {
+  const value = rankOutputFixture();
+  return {
+    ...value,
+    suggestedEvents: Array.from({ length }, (_, index) => ({
+      ...value.suggestedEvents[0],
+      id: `suggestion_${index}`,
+    })),
+  };
+};
+
+const rankOutputWithHoles = (length: number) => {
+  const value = rankOutputFixture();
+  return {
+    ...value,
+    rankedHoles: Array.from({ length }, (_, index) => ({
+      ...value.rankedHoles[0],
+      eventId: `event_${index}`,
+    })),
+  };
+};
+
+const rankRequestWithSentences = (length: number) => {
+  const value = rankRequestFixture();
+  return {
+    ...value,
+    sentences: Array.from({ length }, (_, index) => ({
+      index: index + 1,
+      text: "Sentence.",
+    })),
+  };
+};
+
+describe("declared hard limits", () => {
+  test.each([
+    {
+      name: "id: 64",
+      atMax: () => {
+        const value = extractionFixture();
+        value.machine.states[0].id = "a".repeat(64);
+        return decodeExtractionOutput(value);
+      },
+      overMax: () => {
+        const value = extractionFixture();
+        value.machine.states[0].id = "a".repeat(65);
+        return decodeExtractionOutput(value);
+      },
+      path: "$.machine.states[0].id",
+    },
+    {
+      name: "name: 64",
+      atMax: () => {
+        const value = extractionFixture();
+        value.machine.states[0].name = "N".repeat(64);
+        return decodeExtractionOutput(value);
+      },
+      overMax: () => {
+        const value = extractionFixture();
+        value.machine.states[0].name = "N".repeat(65);
+        return decodeExtractionOutput(value);
+      },
+      path: "$.machine.states[0].name",
+    },
+    {
+      name: "rationale: 300",
+      atMax: () => {
+        const value = rankOutputFixture();
+        value.rankedHoles[0].rationale = "r".repeat(300);
+        return decodeRankOutput(value);
+      },
+      overMax: () => {
+        const value = rankOutputFixture();
+        value.rankedHoles[0].rationale = "r".repeat(301);
+        return decodeRankOutput(value);
+      },
+      path: "$.rankedHoles[0].rationale",
+    },
+    {
+      name: "surfaceForms: 10",
+      atMax: () => {
+        const value = extractionFixture();
+        value.machine.events[0].surfaceForms = Array(10).fill("starts");
+        return decodeExtractionOutput(value);
+      },
+      overMax: () => {
+        const value = extractionFixture();
+        value.machine.events[0].surfaceForms = Array(11).fill("starts");
+        return decodeExtractionOutput(value);
+      },
+      path: "$.machine.events[0].surfaceForms",
+    },
+    {
+      name: "Evidence: 20",
+      atMax: () => {
+        const value = extractionFixture();
+        value.machine.states[0].evidence = Array(20).fill(1);
+        return decodeExtractionOutput(value);
+      },
+      overMax: () => {
+        const value = extractionFixture();
+        value.machine.states[0].evidence = Array(21).fill(1);
+        return decodeExtractionOutput(value);
+      },
+      path: "$.machine.states[0].evidence",
+    },
+    {
+      name: "states: 30",
+      atMax: () => decodeExtractionOutput(extractionWithStates(30)),
+      overMax: () => decodeExtractionOutput(extractionWithStates(31)),
+      path: "$.machine.states",
+    },
+    {
+      name: "events: 30",
+      atMax: () => decodeExtractionOutput(extractionWithEvents(30)),
+      overMax: () => decodeExtractionOutput(extractionWithEvents(31)),
+      path: "$.machine.events",
+    },
+    {
+      name: "transitions: 200",
+      atMax: () => decodeExtractionOutput(extractionWithTransitions(200)),
+      overMax: () => decodeExtractionOutput(extractionWithTransitions(201)),
+      path: "$.machine.transitions",
+    },
+    {
+      name: "suggestions: 10",
+      atMax: () => decodeRankOutput(rankOutputWithSuggestions(10)),
+      overMax: () => decodeRankOutput(rankOutputWithSuggestions(11)),
+      path: "$.suggestedEvents",
+    },
+    {
+      name: "ranked holes: 100",
+      atMax: () => decodeRankOutput(rankOutputWithHoles(100)),
+      overMax: () => decodeRankOutput(rankOutputWithHoles(101)),
+      path: "$.rankedHoles",
+    },
+    {
+      name: "Sentences: 4,000",
+      atMax: () => decodeRankRequest(rankRequestWithSentences(4_000)),
+      overMax: () => decodeRankRequest(rankRequestWithSentences(4_001)),
+      path: "$.sentences",
+    },
+    {
+      name: "Sentence text: 4,000",
+      atMax: () => {
+        const value = rankRequestFixture();
+        value.sentences = [{ index: 1, text: "x".repeat(4_000) }];
+        return decodeRankRequest(value);
+      },
+      overMax: () => {
+        const value = rankRequestFixture();
+        value.sentences = [{ index: 1, text: "x".repeat(4_001) }];
+        return decodeRankRequest(value);
+      },
+      path: "$.sentences[0].text",
+    },
+    {
+      name: "dropped suggestions: 10",
+      atMax: () =>
+        decodeCachedSample({ ...cachedSampleFixture(), droppedSuggestions: 10 }),
+      overMax: () =>
+        decodeCachedSample({ ...cachedSampleFixture(), droppedSuggestions: 11 }),
+      path: "$.droppedSuggestions",
+    },
+    {
+      name: "absolute op Spec: 65,536 characters",
+      atMax: () => decodeOpEnvelope({ op: "extract", spec: "x".repeat(65_536) }),
+      overMax: () => decodeOpEnvelope({ op: "extract", spec: "x".repeat(65_537) }),
+      path: "$.spec",
+    },
+  ])("accepts exact max and rejects max + 1 for $name", ({
+    atMax,
+    overMax,
+    path,
+  }) => {
+    expectDecodeSuccess(atMax());
+    expectDecodeError(overMax(), path);
+  });
+});
+
+describe("strict object allowlists", () => {
+  test.each([
+    {
+      name: "extraction root",
+      decode: () => decodeExtractionOutput({ ...extractionFixture(), extra: true }),
+      path: "$",
+    },
+    {
+      name: "viability",
+      decode: () => {
+        const value = extractionFixture();
+        return decodeExtractionOutput({
+          ...value,
+          viability: { ...value.viability, extra: true },
+        });
+      },
+      path: "$.viability",
+    },
+    {
+      name: "machine",
+      decode: () => {
+        const value = extractionFixture();
+        return decodeExtractionOutput({
+          ...value,
+          machine: { ...value.machine, extra: true },
+        });
+      },
+      path: "$.machine",
+    },
+    {
+      name: "state",
+      decode: () => {
+        const value = extractionFixture();
+        return decodeExtractionOutput({
+          ...value,
+          machine: {
+            ...value.machine,
+            states: [{ ...value.machine.states[0], userAdded: false }],
+          },
+        });
+      },
+      path: "$.machine.states[0]",
+    },
+    {
+      name: "event",
+      decode: () => {
+        const value = extractionFixture();
+        return decodeExtractionOutput({
+          ...value,
+          machine: {
+            ...value.machine,
+            events: [{ ...value.machine.events[0], extra: true }],
+          },
+        });
+      },
+      path: "$.machine.events[0]",
+    },
+    {
+      name: "transition",
+      decode: () => {
+        const value = extractionFixture();
+        return decodeExtractionOutput({
+          ...value,
+          machine: {
+            ...value.machine,
+            transitions: [
+              {
+                from: "idle",
+                event: "start",
+                to: "idle",
+                evidence: [1],
+                extra: true,
+              },
+            ],
+          },
+        });
+      },
+      path: "$.machine.transitions[0]",
+    },
+    {
+      name: "ranked hole",
+      decode: () => {
+        const value = rankOutputFixture();
+        return decodeRankOutput({
+          ...value,
+          rankedHoles: [{ ...value.rankedHoles[0], extra: true }],
+        });
+      },
+      path: "$.rankedHoles[0]",
+    },
+    {
+      name: "suggestion",
+      decode: () => {
+        const value = rankOutputFixture();
+        return decodeRankOutput({
+          ...value,
+          suggestedEvents: [{ ...value.suggestedEvents[0], evidence: [1] }],
+        });
+      },
+      path: "$.suggestedEvents[0]",
+    },
+    {
+      name: "rank-output root",
+      decode: () => decodeRankOutput({ ...rankOutputFixture(), extra: true }),
+      path: "$",
+    },
+    {
+      name: "Sentence",
+      decode: () => {
+        const value = rankRequestFixture();
+        return decodeRankRequest({
+          ...value,
+          sentences: [{ ...value.sentences[0], extra: true }],
+        });
+      },
+      path: "$.sentences[0]",
+    },
+    {
+      name: "cached-sample root",
+      decode: () => decodeCachedSample({ ...cachedSampleFixture(), extra: true }),
+      path: "$",
+    },
+    {
+      name: "extract-op root",
+      decode: () =>
+        decodeOpEnvelope({ op: "extract", spec: "A system starts.", extra: true }),
+      path: "$",
+    },
+    {
+      name: "rank-op root",
+      decode: () =>
+        decodeOpEnvelope({
+          ...rankRequestFixture(),
+          holes: [{ stateId: "idle", eventId: "start" }],
+        }),
+      path: "$",
+    },
+  ])("rejects unexpected fields on $name", ({ decode, path }) => {
+    expectDecodeError(decode(), path);
   });
 });
 
