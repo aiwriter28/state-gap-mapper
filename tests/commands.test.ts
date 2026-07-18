@@ -100,6 +100,50 @@ describe("validated machine commands", () => {
     if (!recreated.ok) throw new Error(recreated.error.message);
     expect(recreated.machine.events.map((event) => event.id)).toContain("code_expired_2");
   });
+
+  test("accepting a Suggested Event enforces event and surface-form invariants atomically", () => {
+    const suggestion: SuggestedEvent = {
+      id: "code_expired",
+      name: "Code expired",
+      surfaceForms: ["code expires"],
+      rationale: "Codes can expire.",
+      confidence: 0.8,
+    };
+    const maxed: Machine = {
+      ...orderMachine,
+      events: [
+        ...orderMachine.events,
+        ...Array.from({ length: 25 }, (_, index) => ({
+          id: `capacity_${index}`,
+          name: `Capacity ${index}`,
+          surfaceForms: [`capacity ${index}`],
+          evidence: [],
+          userAdded: true,
+        })),
+      ],
+    };
+    expectAtomicError(maxed, "too_large", (machine) => acceptSuggestedEvent(machine, suggestion, new Map()));
+    expectAtomicError(orderMachine, "too_large", (machine) => acceptSuggestedEvent(machine, {
+      ...suggestion,
+      surfaceForms: Array.from({ length: 11 }, (_, index) => `expiry ${index}`),
+    }, new Map()));
+    expectAtomicError(orderMachine, "bad_surface_forms", (machine) => acceptSuggestedEvent(machine, {
+      ...suggestion,
+      surfaceForms: [],
+    }, new Map()));
+    expectAtomicError(orderMachine, "bad_surface_forms", (machine) => acceptSuggestedEvent(machine, {
+      ...suggestion,
+      surfaceForms: ["code expires", " code expires "],
+    }, new Map()));
+
+    const accepted = new Map<string, string>();
+    const result = acceptSuggestedEvent(orderMachine, suggestion, accepted);
+    expect(result).toMatchObject({ ok: true, acceptedEventId: "code_expired" });
+    expect(accepted.size).toBe(0);
+    if (!result.ok) throw new Error(result.error.message);
+    suggestion.surfaceForms[0] = "mutated later";
+    expect(result.machine.events.at(-1)?.surfaceForms).toEqual(["code expires"]);
+  });
   test("adds slugified user state, suffixes collisions, and rejects blank or oversized names", () => {
     const added = addState(orderMachine, { name: "Awaiting Review" });
     const first = resultMachine(added);

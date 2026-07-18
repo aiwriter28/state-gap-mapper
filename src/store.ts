@@ -89,6 +89,7 @@ export interface AppActions {
   acceptSuggestedEvent(suggestion: SuggestedEvent): AcceptSuggestedEventResult;
   dismissHole(hole: MissingTransition): void;
   undoDismiss(hole: MissingTransition): void;
+  clearCommandError(): void;
   applyCommand<TArgs>(
     command: (machine: Machine, args: TArgs) => CommandResult,
     args: TArgs,
@@ -379,6 +380,7 @@ function stateCreator(client: LlmClient) {
       });
     },
     acceptHole: (hole, target) => {
+      set({ commandError: null });
       const current = get().machine;
       if (current === null) {
         const result: AcceptHoleResult = {
@@ -424,6 +426,7 @@ function stateCreator(client: LlmClient) {
       return result;
     },
     acceptSuggestedEvent: (suggestion) => {
+      set({ commandError: null });
       const current = get().machine;
       if (current === null) {
         const result: AcceptSuggestedEventResult = {
@@ -486,6 +489,7 @@ function stateCreator(client: LlmClient) {
         };
       });
     },
+    clearCommandError: () => set({ commandError: null }),
     applyCommand: (command, args) => {
       const current = get().machine;
       if (current === null) {

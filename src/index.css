@@ -250,6 +250,8 @@ textarea:focus-visible,
 .suggested-card .rank-metric { color: var(--amber); }
 .suggested-actions { justify-content: flex-end; margin-top: 10px; }
 .rank-message { margin: 0 0 10px; border: 1px solid var(--panel-strong); border-radius: 8px; padding: 9px 10px; color: var(--faded); font-size: 0.8rem; line-height: 1.4; }
+.command-feedback { margin: 10px 0 0; border: 1px solid var(--faded); border-radius: 8px; padding: 9px 10px; color: var(--chalk); font-size: 0.78rem; line-height: 1.4; }
+.gap-scroll > .command-feedback { margin: 0 0 10px; }
 .gap-card, .structural-card, .suggested-card { overflow-wrap: anywhere; }
 .matrix-link { margin: 18px 10px; color: var(--faded); font-size: 0.875rem; }
 .gap-empty { display: grid; min-height: 100%; place-content: center; padding: 20px; color: var(--faded); font-size: 0.875rem; line-height: 1.45; text-align: center; }

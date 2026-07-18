@@ -38,3 +38,27 @@
 ## Deferrals
 
 - Browser walkthrough awaits the cached sample payload introduced in Task 11; no API, cache, matrix, or coverage work was added here.
+
+## Independent Review Follow-up
+
+### RED
+
+- Added rendered regressions for stale Missing Transition errors, Suggested Event cap errors, native Cancel activation with Enter, and new-target acceptance through exact rendered stub output.
+- Added a command audit covering the 30-event cap, 10-surface-form cap, empty and normalized-duplicate surface forms, immutable input/provenance, and copied surface-form data.
+- Focused RED had four intended failures: acceptance errors were invisible, Cancel Enter was intercepted as confirm, and invalid empty/duplicate Suggested Event surface forms were accepted.
+
+### GREEN
+
+- GapPanel now renders current command failures with `role="alert"`; picker failures remain open, Suggested Event failures appear beside their origin, and fresh actions clear stale feedback.
+- Picker-level Enter confirmation now ignores button targets so native Cancel and Confirm activation remain correct while input/select Enter still confirms.
+- Suggested Event acceptance now validates required, nonblank, normalized-unique, bounded surface forms before any machine change.
+- Rendered new-target coverage confirms the new state, transition, and exact Test Stub.
+
+### Follow-up gates
+
+- Focused rendered/command suite: 18 passed.
+- Typecheck: passed.
+- Lint: passed.
+- Full test suite: 191 passed.
+- Production build: passed with the existing over-500 kB chunk warning only.
+- Diff check: passed.

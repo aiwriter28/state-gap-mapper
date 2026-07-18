@@ -29,11 +29,13 @@ function AcceptPicker({
   hole,
   onAccept,
   onClose,
+  errorMessage,
 }: {
   machine: Machine;
   hole: MissingTransition;
   onAccept: (target: HoleTarget) => boolean;
   onClose: () => void;
+  errorMessage: string | null;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [targetKind, setTargetKind] = useState<"existing" | "new">("existing");
@@ -60,7 +62,7 @@ function AcceptPicker({
       onClose();
       return;
     }
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && (event.target as HTMLElement).tagName !== "BUTTON") {
       event.preventDefault();
       confirm();
       return;
@@ -135,6 +137,7 @@ function AcceptPicker({
             />
           </label>
         )}
+        {errorMessage !== null ? <p className="command-feedback" role="alert">{errorMessage}</p> : null}
         <div className="dialog-actions">
           <button className="dialog-button" type="button" onClick={onClose}>Cancel</button>
           <button className="dialog-button primary" type="button" disabled={!canConfirm} onClick={confirm}>Confirm Accept</button>
@@ -206,6 +209,8 @@ export function GapPanel() {
   const acceptSuggestedEvent = useStore(appStore, (state) => state.acceptSuggestedEvent);
   const dismissHole = useStore(appStore, (state) => state.dismissHole);
   const undoDismiss = useStore(appStore, (state) => state.undoDismiss);
+  const commandError = useStore(appStore, (state) => state.commandError);
+  const clearCommandError = useStore(appStore, (state) => state.clearCommandError);
   const rank = useStore(appStore, (state) => state.rank);
   const rankPending = useStore(appStore, (state) => state.rankPending);
   const rankError = useStore(appStore, (state) => state.rankError);
@@ -223,6 +228,18 @@ export function GapPanel() {
       .map(holeFromPairKey)
       .filter((hole): hole is MissingTransition => hole !== null && stateIds.has(hole.stateId) && eventIds.has(hole.eventId));
   }, [dismissedPairKeys, machine]);
+  const openPicker = (hole: MissingTransition) => {
+    clearCommandError();
+    setAcceptingHole(hole);
+  };
+  const closePicker = () => {
+    clearCommandError();
+    setAcceptingHole(null);
+  };
+  const acceptSuggestion = (suggestion: Parameters<typeof acceptSuggestedEvent>[0]) => {
+    clearCommandError();
+    acceptSuggestedEvent(suggestion);
+  };
 
   return (
     <section className="pane gaps-pane" aria-labelledby="gaps-heading">
@@ -239,6 +256,9 @@ export function GapPanel() {
         <div className="gap-scroll">
           {rankError !== null ? <p className="rank-message">Ranking is unavailable right now. Structural gaps are still shown.</p> : null}
           {rankTruncated ? <p className="rank-message">Ranked the first 100 holes; the rest remain listed as Unranked.</p> : null}
+          {commandError !== null && acceptingHole === null ? (
+            <p className="command-feedback" role="alert">{commandError.message}</p>
+          ) : null}
 
           <h3 className="gap-section-heading">Missing Transitions</h3>
           {displayHoles.map((hole) => (
@@ -247,7 +267,7 @@ export function GapPanel() {
               machine={machine}
               selected={pairKey(hole) === selectedHoleKey}
               onSelect={selectHole}
-              onAccept={setAcceptingHole}
+              onAccept={openPicker}
               onDismiss={dismissHole}
               key={pairKey(hole)}
             />
@@ -285,7 +305,7 @@ export function GapPanel() {
                   <p className="rank-metric">Confidence {relevanceLabel(suggestion.confidence)}</p>
                   <p className="rationale">{suggestion.rationale}</p>
                   <div className="card-actions suggested-actions">
-                    <button className="quiet-button" type="button" onClick={() => acceptSuggestedEvent(suggestion)}>Accept</button>
+                    <button className="quiet-button" type="button" onClick={() => acceptSuggestion(suggestion)}>Accept</button>
                   </div>
                 </article>
               ))}
@@ -300,7 +320,8 @@ export function GapPanel() {
           machine={machine}
           hole={acceptingHole}
           onAccept={(target) => acceptHole(acceptingHole, target).ok}
-          onClose={() => setAcceptingHole(null)}
+          onClose={closePicker}
+          errorMessage={commandError?.message ?? null}
         />
       ) : null}
     </section>

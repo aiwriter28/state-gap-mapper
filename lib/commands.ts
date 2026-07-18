@@ -96,6 +96,32 @@ function uniqueSlug(name: string, existing: ReadonlySet<string>, subject: string
   }
 }
 
+function validateSuggestedSurfaceForms(surfaceForms: string[]): CommandFailure | null {
+  const subject = "suggestedEvent.surfaceForms";
+  if (surfaceForms.length === 0) {
+    return err("bad_surface_forms", subject, "A Suggested Event requires at least one surface form.");
+  }
+  if (surfaceForms.length > DOMAIN_LIMITS.surfaceForms) {
+    return err("too_large", subject, `Surface forms have at most ${DOMAIN_LIMITS.surfaceForms} entries.`);
+  }
+  const seen = new Set<string>();
+  for (let index = 0; index < surfaceForms.length; index += 1) {
+    const form = surfaceForms[index];
+    const normalized = form.trim();
+    if (form.length > DOMAIN_LIMITS.idOrName) {
+      return err("too_large", `${subject}[${index}]`, `Surface forms must be at most ${DOMAIN_LIMITS.idOrName} characters.`);
+    }
+    if (normalized.length === 0) {
+      return err("bad_surface_forms", `${subject}[${index}]`, "Surface forms must not be blank.");
+    }
+    if (seen.has(normalized)) {
+      return err("bad_surface_forms", `${subject}[${index}]`, `Duplicate surface form ${normalized}.`);
+    }
+    seen.add(normalized);
+  }
+  return null;
+}
+
 function addStateArgs(args: AddStateArgs | string): AddStateArgs {
   return typeof args === "string" ? { name: args } : args;
 }
@@ -312,6 +338,8 @@ export function acceptSuggestedEvent(
 
   const name = normalizedName(suggestion.name, "suggestedEvent.name");
   if (typeof name !== "string") return name;
+  const surfaceFormError = validateSuggestedSurfaceForms(suggestion.surfaceForms);
+  if (surfaceFormError !== null) return surfaceFormError;
   const existingIds = new Set(machine.events.map((event) => event.id));
   const id = rememberedId !== undefined && !existingIds.has(rememberedId)
     ? rememberedId
