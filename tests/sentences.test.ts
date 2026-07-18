@@ -12,7 +12,14 @@ test("splits on sentence terminators and newlines, 1-based sequential", () => {
 });
 
 test("does not split on decimals or e.g.", () => {
-  expect(splitSpec("Retry up to 3.5 times e.g. on timeout.")).toHaveLength(1);
+  expect(splitSpec("Retry up to 3.5 times e.g. on timeout.")).toEqual([
+    { index: 1, text: "Retry up to 3.5 times e.g. on timeout." },
+  ]);
+});
+
+test("preserves literal characters previously used as sentinels", () => {
+  const text = "Keep \uE000 and \uE001 exactly.";
+  expect(splitSpec(text)).toEqual([{ index: 1, text }]);
 });
 
 test("empty and whitespace-only input yield []", () => {
