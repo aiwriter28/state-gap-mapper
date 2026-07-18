@@ -1,0 +1,75 @@
+{
+  "url": "http://127.0.0.1:8876/state-gap-mapper.html",
+  "results": [
+    {
+      "check": "raster-assets",
+      "status": "pass",
+      "detail": "No raster assets; all UI is live DOM/SVG."
+    },
+    {
+      "check": "1536-shell-geometry",
+      "status": "pass",
+      "detail": {
+        "shell": {
+          "width": 1536,
+          "height": 1024
+        },
+        "panes": [
+          {
+            "left": 0,
+            "right": 340,
+            "top": 56,
+            "bottom": 846
+          },
+          {
+            "left": 340,
+            "right": 1156,
+            "top": 56,
+            "bottom": 846
+          },
+          {
+            "left": 1156,
+            "right": 1536,
+            "top": 56,
+            "bottom": 846
+          }
+        ],
+        "viewport": [
+          1536,
+          1024
+        ]
+      }
+    },
+    {
+      "check": "interaction-contract",
+      "status": "pass",
+      "detail": "Select, accept, dismiss/undo, matrix, suggestion cascade, copy feedback, drawer, and keyboard traversal verified."
+    },
+    {
+      "check": "full-plan-ui-contract",
+      "status": "pass",
+      "detail": "Extraction/refusal/error, ranking, structural categories, coverage, canvas commands, dirty guard, target creation, exact copy fallback, and bottom scroll verified."
+    },
+    {
+      "check": "1280-layout",
+      "status": "pass",
+      "detail": {
+        "docWidth": 1280,
+        "viewportWidth": 1280,
+        "docHeight": 800,
+        "viewportHeight": 800
+      }
+    },
+    {
+      "check": "reduced-motion",
+      "status": "pass",
+      "detail": "Ghost pulse disabled."
+    },
+    {
+      "check": "console-errors",
+      "status": "pass",
+      "detail": "No console or page errors."
+    }
+  ],
+  "errors": []
+}

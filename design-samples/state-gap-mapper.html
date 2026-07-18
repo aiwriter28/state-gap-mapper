@@ -1,0 +1,2145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>State Gap Mapper — Design Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --blueprint: #102338;
+        --blueprint-deep: #0c1b2c;
+        --panel: #16304f;
+        --panel-strong: #1c3d61;
+        --chalk: #dde9f5;
+        --faded: #6c89a6;
+        --soft-blue: #8eb9e8;
+        --redline: #e8474f;
+        --red-wash: rgba(232, 71, 79, 0.16);
+        --amber: #efa93b;
+        --header-h: 56px;
+        --stub-h: 178px;
+        --spec-w: 340px;
+        --gaps-w: 380px;
+        --radius: 10px;
+        color-scheme: dark;
+        font-synthesis: none;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--blueprint);
+        color: var(--chalk);
+      }
+
+      body {
+        min-width: 1200px;
+        font-family: "Barlow", "Arial Narrow", sans-serif;
+      }
+
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      button:focus-visible,
+      textarea:focus-visible,
+      [tabindex="0"]:focus-visible {
+        outline: 2px solid var(--soft-blue);
+        outline-offset: 3px;
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-rows: var(--header-h) minmax(0, 1fr) var(--stub-h);
+        width: 100vw;
+        height: 100vh;
+        min-width: 1200px;
+        background:
+          radial-gradient(circle at 50% 35%, rgba(18, 63, 99, 0.19), transparent 46%),
+          var(--blueprint);
+      }
+
+      .app-header {
+        position: relative;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        min-width: 0;
+        padding: 0 28px;
+        border-bottom: 1px solid var(--panel-strong);
+        background: rgba(12, 27, 44, 0.38);
+      }
+
+      .wordmark {
+        flex: 0 0 auto;
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .positioning {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--faded);
+        font-size: 0.9375rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .quiet-button {
+        border: 0;
+        padding: 6px 8px;
+        background: transparent;
+        color: var(--faded);
+        cursor: pointer;
+      }
+
+      .quiet-button:hover,
+      .quiet-button[aria-expanded="true"] {
+        color: var(--soft-blue);
+      }
+
+      .docs-button {
+        margin-left: auto;
+        font-size: 0.9375rem;
+      }
+
+      .docs-popover {
+        position: absolute;
+        z-index: 50;
+        top: 48px;
+        right: 20px;
+        width: 286px;
+        padding: 16px;
+        border: 1px solid var(--faded);
+        border-radius: var(--radius);
+        background: var(--blueprint-deep);
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+      }
+
+      .docs-popover[hidden] {
+        display: none;
+      }
+
+      .popover-title {
+        margin: 0 0 6px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .docs-popover p {
+        margin: 0 0 14px;
+        color: var(--faded);
+        font-size: 0.875rem;
+        line-height: 1.45;
+      }
+
+      .state-shortcuts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .soft-button,
+      .chip,
+      .copy-button,
+      .dialog-option,
+      .dialog-button {
+        min-height: 36px;
+        border: 1px solid var(--faded);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--faded);
+        cursor: pointer;
+      }
+
+      .soft-button:hover,
+      .chip:hover,
+      .copy-button:hover,
+      .dialog-option:hover,
+      .dialog-button:hover {
+        border-color: var(--soft-blue);
+        color: var(--soft-blue);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: var(--spec-w) minmax(480px, 1fr) var(--gaps-w);
+        min-height: 0;
+      }
+
+      .pane {
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .spec-pane,
+      .canvas-pane {
+        border-right: 1px solid var(--panel-strong);
+      }
+
+      .spec-pane,
+      .gaps-pane {
+        display: flex;
+        flex-direction: column;
+        padding: 0 16px;
+      }
+
+      .pane-header {
+        display: flex;
+        flex: 0 0 49px;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+        padding: 0 8px;
+        border-bottom: 1px solid var(--panel-strong);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .header-action {
+        min-height: 30px;
+        margin-left: auto;
+        padding-inline: 6px;
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0;
+        text-transform: none;
+        white-space: nowrap;
+      }
+
+      .docs-popover {
+        max-height: min(620px, calc(100vh - 68px));
+        overflow: auto;
+      }
+
+      .pane-icon {
+        width: 22px;
+        height: 22px;
+        color: var(--chalk);
+        stroke-width: 1.6;
+      }
+
+      .spec-content,
+      .gap-scroll {
+        min-height: 0;
+        overflow: auto;
+        scrollbar-color: var(--panel-strong) transparent;
+        scrollbar-width: thin;
+      }
+
+      .spec-content {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        padding: 18px 0 14px;
+      }
+
+      .spec-content[hidden] {
+        display: none;
+      }
+
+      .sentence-list {
+        display: grid;
+        gap: 4px;
+      }
+
+      .sentence {
+        display: grid;
+        grid-template-columns: 36px 1fr;
+        padding: 8px 8px 8px 5px;
+        border-left: 3px solid transparent;
+        font-size: 0.9375rem;
+        line-height: 1.5;
+      }
+
+      .sentence-number,
+      .coverage,
+      .counter,
+      .chip,
+      .pair,
+      .evidence-chip,
+      .score,
+      .suggestion-name,
+      .graph text,
+      .stub-code,
+      .matrix-table,
+      .state-badge {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+      }
+
+      .sentence-number {
+        color: var(--faded);
+        font-size: 0.8125rem;
+      }
+
+      .sentence.selected {
+        border-left-color: var(--redline);
+        border-radius: 0 7px 7px 0;
+        background: var(--red-wash);
+      }
+
+      .sentence.uncovered,
+      .sentence.uncovered .sentence-number {
+        color: var(--faded);
+      }
+
+      .spec-meta {
+        margin-top: auto;
+        padding: 14px 8px 0;
+        border-top: 1px solid var(--panel-strong);
+      }
+
+      .coverage,
+      .counter {
+        color: var(--faded);
+        font-size: 0.75rem;
+      }
+
+      .sample-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin: 12px 0 16px;
+      }
+
+      .chip {
+        min-height: 30px;
+        padding: 0 9px;
+        border-color: var(--panel-strong);
+        border-radius: 6px;
+        background: rgba(22, 48, 79, 0.72);
+        font-size: 0.7rem;
+        white-space: nowrap;
+      }
+
+      .empty-spec {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 12px;
+        padding: 18px 8px 0;
+      }
+
+      .empty-spec[hidden] {
+        display: none;
+      }
+
+      .empty-title {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 500;
+      }
+
+      .empty-copy {
+        margin: 0;
+        color: var(--faded);
+        font-size: 0.875rem;
+        line-height: 1.45;
+      }
+
+      .spec-textarea {
+        flex: 1;
+        min-height: 190px;
+        resize: none;
+        border: 1px solid var(--panel-strong);
+        border-radius: var(--radius);
+        padding: 14px;
+        background: rgba(12, 27, 44, 0.34);
+        color: var(--chalk);
+        font-size: 0.875rem;
+        line-height: 1.5;
+      }
+
+      .spec-textarea::placeholder {
+        color: var(--faded);
+      }
+
+      .extract-button {
+        min-height: 40px;
+        border: 1px solid var(--chalk);
+        border-radius: 8px;
+        background: var(--chalk);
+        color: var(--blueprint);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .extract-button:disabled {
+        border-color: var(--panel-strong);
+        background: var(--panel);
+        color: var(--faded);
+        cursor: not-allowed;
+      }
+
+      .canvas-pane {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .canvas-pane::before {
+        position: absolute;
+        inset: 49px 0 0;
+        z-index: 0;
+        background-image: radial-gradient(circle, rgba(108, 137, 166, 0.16) 1px, transparent 1.2px);
+        background-size: 24px 24px;
+        content: "";
+        pointer-events: none;
+      }
+
+      .canvas-pane .pane-header {
+        position: relative;
+        z-index: 2;
+        margin: 0 16px;
+      }
+
+      .canvas-field {
+        position: relative;
+        z-index: 1;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .graph {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .graph .drawn,
+      .graph .node-outline,
+      .graph .final-inner,
+      .graph .label-outline {
+        fill: var(--blueprint);
+        stroke: var(--chalk);
+        stroke-width: 1.5;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .graph .edge-muted {
+        fill: none;
+        stroke: var(--faded);
+        stroke-width: 1.4;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .graph .edge-chalk {
+        fill: none;
+        stroke: var(--chalk);
+        stroke-width: 1.5;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .graph .node-label,
+      .graph .event-label {
+        fill: var(--chalk);
+        text-anchor: middle;
+      }
+
+      .graph .node-label {
+        font-size: 17px;
+      }
+
+      .graph .event-label {
+        font-size: 10px;
+      }
+
+      .graph [data-node] {
+        cursor: pointer;
+      }
+
+      .graph [data-node]:hover .node-outline,
+      .graph [data-node].selected-node .node-outline {
+        stroke: var(--soft-blue);
+        stroke-width: 2.5;
+      }
+
+      .manual-node {
+        display: none;
+      }
+
+      .graph.edited .manual-node {
+        display: block;
+      }
+
+      .manual-final-outline {
+        display: none;
+      }
+
+      .graph.manual-final .manual-final-outline {
+        display: block;
+      }
+
+      .graph.edge-deleted [data-transition="checkout"] {
+        display: none;
+      }
+
+      .added-badge {
+        fill: var(--faded);
+        font-size: 9px;
+        text-anchor: middle;
+      }
+
+      .graph .ghost-path {
+        fill: none;
+        stroke: var(--redline);
+        stroke-width: 6;
+        stroke-dasharray: 15 10;
+        stroke-linecap: round;
+        animation: ghost-pulse 2s ease-in-out infinite;
+        filter: drop-shadow(0 0 5px rgba(232, 71, 79, 0.24));
+        vector-effect: non-scaling-stroke;
+      }
+
+      .graph .ghost-copy {
+        fill: var(--redline);
+        font-family: "Barlow", sans-serif;
+        font-size: 38px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+
+      .graph.selected-gap .ghost-path {
+        stroke-dasharray: none;
+        animation: none;
+      }
+
+      .accepted-edge {
+        display: none;
+      }
+
+      .graph.accepted .ghost {
+        display: none;
+      }
+
+      .graph.accepted .accepted-edge {
+        display: block;
+        animation: draw-edge 250ms ease-out both;
+      }
+
+      .canvas-empty {
+        position: absolute;
+        inset: 49px 0 0;
+        z-index: 3;
+        display: grid;
+        place-content: center;
+        padding: 28px;
+        text-align: center;
+      }
+
+      .canvas-empty[hidden] {
+        display: none;
+      }
+
+      .canvas-empty strong {
+        display: block;
+        margin-bottom: 7px;
+        font-size: 1.1rem;
+        font-weight: 500;
+      }
+
+      .canvas-empty span {
+        color: var(--faded);
+        font-size: 0.875rem;
+      }
+
+      .canvas-status {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        display: grid;
+        place-content: center;
+        padding: 32px;
+        background: rgba(16, 35, 56, 0.97);
+        text-align: center;
+      }
+
+      .canvas-status[hidden] {
+        display: none;
+      }
+
+      .canvas-status strong {
+        margin-bottom: 8px;
+        font-size: 1.05rem;
+        font-weight: 500;
+      }
+
+      .canvas-status span {
+        max-width: 390px;
+        color: var(--faded);
+        font-size: 0.875rem;
+        line-height: 1.45;
+      }
+
+      .canvas-status .soft-button {
+        width: max-content;
+        margin: 18px auto 0;
+        padding-inline: 14px;
+      }
+
+      .canvas-inspector {
+        position: absolute;
+        z-index: 9;
+        top: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: 270px;
+        overflow: auto;
+        border: 1px solid var(--faded);
+        border-radius: var(--radius);
+        padding: 14px;
+        background: var(--blueprint-deep);
+        box-shadow: 0 18px 46px rgba(0, 0, 0, 0.35);
+      }
+
+      .canvas-inspector[hidden] {
+        display: none;
+      }
+
+      .inspector-header,
+      .inspector-actions,
+      .transition-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .inspector-header {
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+
+      .inspector-title,
+      .inspector-section-title,
+      .gap-section-heading {
+        margin: 0;
+        color: var(--faded);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .inspector-section-title {
+        margin: 16px 0 8px;
+      }
+
+      .inspector-close {
+        min-height: 28px;
+        padding: 3px 7px;
+      }
+
+      .field-label {
+        display: grid;
+        gap: 5px;
+        margin-bottom: 10px;
+        color: var(--faded);
+        font-size: 0.72rem;
+      }
+
+      .field-input,
+      .field-select {
+        width: 100%;
+        min-height: 36px;
+        border: 1px solid var(--panel-strong);
+        border-radius: 7px;
+        padding: 0 9px;
+        background: var(--blueprint);
+        color: var(--chalk);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+      }
+
+      .field-input:focus,
+      .field-select:focus {
+        border-color: var(--soft-blue);
+        outline: none;
+      }
+
+      .inspector-actions {
+        flex-wrap: wrap;
+      }
+
+      .inspector-actions .soft-button {
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 0.72rem;
+      }
+
+      .transition-row {
+        justify-content: space-between;
+        border-top: 1px solid var(--panel-strong);
+        padding: 8px 0;
+        color: var(--chalk);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+      }
+
+      .inspector-feedback,
+      .ranking-note,
+      .copy-feedback {
+        color: var(--faded);
+        font-size: 0.72rem;
+        line-height: 1.4;
+      }
+
+      .inspector-feedback {
+        min-height: 32px;
+        margin: 10px 0 0;
+      }
+
+      .inspector-feedback.error {
+        color: var(--redline);
+      }
+
+      .gap-scroll {
+        flex: 1;
+        padding: 10px 2px 18px;
+      }
+
+      .gap-section-heading {
+        margin: 1px 2px 8px;
+      }
+
+      .ranking-note {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+        border: 1px solid var(--panel-strong);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+
+      .ranking-note[hidden],
+      .structural-sections[hidden],
+      .edit-gap-card[hidden] {
+        display: none;
+      }
+
+      .structural-card {
+        margin-bottom: 8px;
+        border: 1px solid var(--faded);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: rgba(22, 48, 79, 0.36);
+      }
+
+      .structural-card .pair {
+        font-size: 0.8rem;
+      }
+
+      .structural-label {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--faded);
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .edit-gap-card {
+        margin-bottom: 9px;
+        border-left: 3px solid var(--redline);
+        border-radius: 8px;
+        padding: 9px 11px;
+        background: rgba(22, 48, 79, 0.42);
+      }
+
+      .edit-gap-card .pair {
+        font-size: 0.78rem;
+      }
+
+      .unranked-tag {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--faded);
+        font-size: 0.66rem;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .gap-card {
+        position: relative;
+        margin-bottom: 10px;
+        border: 1px solid var(--faded);
+        border-radius: var(--radius);
+        background: rgba(22, 48, 79, 0.52);
+        overflow: hidden;
+      }
+
+      .gap-card::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 3px;
+        background: var(--redline);
+        content: "";
+      }
+
+      .gap-card.expanded {
+        padding: 14px 14px 12px 18px;
+      }
+
+      .gap-card[hidden] {
+        display: none;
+      }
+
+      .redline-label,
+      .suggestion-heading {
+        margin: 0 0 10px;
+        color: var(--redline);
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .pair {
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.35;
+      }
+
+      .score-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 12px 0;
+      }
+
+      .score-track {
+        width: 154px;
+        height: 9px;
+        border: 1px solid var(--faded);
+        background: rgba(12, 27, 44, 0.35);
+      }
+
+      .score-fill {
+        width: 33%;
+        height: 100%;
+        background: var(--redline);
+      }
+
+      .score {
+        color: var(--chalk);
+        font-size: 0.75rem;
+      }
+
+      .rationale {
+        margin: 0 0 12px;
+        font-size: 0.875rem;
+        line-height: 1.45;
+      }
+
+      .card-footer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .evidence-chip {
+        display: inline-grid;
+        min-width: 38px;
+        min-height: 30px;
+        place-items: center;
+        border: 1px solid var(--faded);
+        border-radius: 6px;
+        color: var(--chalk);
+        font-size: 0.75rem;
+      }
+
+      .card-actions {
+        display: flex;
+        gap: 12px;
+        margin-left: auto;
+      }
+
+      .gap-card.compact {
+        min-height: 51px;
+      }
+
+      .gap-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 51px;
+        align-items: center;
+        justify-content: space-between;
+        border: 0;
+        padding: 0 14px 0 18px;
+        background: transparent;
+        color: var(--chalk);
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .chevron {
+        display: block;
+        flex: 0 0 auto;
+        width: 9px;
+        height: 9px;
+        border-right: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: rotate(45deg) translateY(-2px);
+      }
+
+      .dismissed-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--panel-strong);
+        border-radius: 8px;
+        color: var(--faded);
+        font-size: 0.75rem;
+      }
+
+      .dismissed-row[hidden] {
+        display: none;
+      }
+
+      .section-rule {
+        height: 1px;
+        margin: 14px 0 13px;
+        background: var(--panel-strong);
+      }
+
+      .suggestion-heading {
+        color: var(--amber);
+        font-size: 0.8125rem;
+      }
+
+      .suggestion-card {
+        margin-bottom: 10px;
+        border: 1.5px dashed var(--amber);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        background: rgba(22, 48, 79, 0.3);
+      }
+
+      .suggestion-name {
+        margin: 0 0 9px;
+        font-size: 0.9375rem;
+      }
+
+      .suggested-tag {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        border: 1px solid var(--amber);
+        border-radius: 6px;
+        padding: 0 8px;
+        color: var(--amber);
+        font-size: 0.75rem;
+      }
+
+      .confidence {
+        display: inline-block;
+        margin-left: 9px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.72rem;
+      }
+
+      .suggestion-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+
+      .matrix-link {
+        width: 100%;
+        text-align: left;
+      }
+
+      .gap-empty {
+        display: grid;
+        min-height: 100%;
+        place-content: center;
+        padding: 20px;
+        color: var(--faded);
+        font-size: 0.875rem;
+        line-height: 1.45;
+        text-align: center;
+      }
+
+      .gap-empty[hidden] {
+        display: none;
+      }
+
+      .stubs-drawer {
+        position: relative;
+        z-index: 10;
+        display: grid;
+        grid-template-rows: 49px minmax(0, 1fr);
+        min-height: 0;
+        border-top: 1px solid var(--panel-strong);
+        background: rgba(12, 27, 44, 0.28);
+        transition: grid-template-rows 180ms ease;
+      }
+
+      .stubs-drawer.collapsed {
+        grid-template-rows: 49px 0;
+      }
+
+      .stub-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 8px 16px 0;
+        border: 1px solid var(--panel-strong);
+        border-radius: var(--radius) var(--radius) 0 0;
+        padding: 0 16px;
+      }
+
+      .stub-title {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .stub-toggle {
+        margin-left: auto;
+      }
+
+      .stub-toggle .chevron {
+        transform: rotate(225deg) translate(-1px, -1px);
+      }
+
+      .stubs-drawer.collapsed .stub-toggle .chevron {
+        transform: rotate(45deg) translateY(-2px);
+      }
+
+      .stub-body {
+        min-height: 0;
+        margin: 0 16px 10px;
+        overflow: hidden;
+        border: 1px solid var(--panel-strong);
+        border-top: 0;
+        border-radius: 0 0 var(--radius) var(--radius);
+        padding: 12px 16px;
+      }
+
+      .stub-strip {
+        position: relative;
+        height: 100%;
+        min-height: 93px;
+        border: 1px solid var(--panel-strong);
+        border-radius: 8px;
+        background: var(--blueprint-deep);
+      }
+
+      .copy-button {
+        position: absolute;
+        z-index: 2;
+        top: 10px;
+        right: 12px;
+        min-height: 31px;
+        padding: 0 12px;
+        background: var(--panel);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+      }
+
+      .copy-feedback {
+        position: absolute;
+        z-index: 2;
+        top: 48px;
+        right: 12px;
+        max-width: 210px;
+        text-align: right;
+      }
+
+      .stub-code {
+        display: grid;
+        grid-template-columns: 35px 1fr;
+        height: 100%;
+        min-height: 91px;
+        padding: 11px 88px 11px 12px;
+        font-size: 0.82rem;
+        line-height: 1.75;
+      }
+
+      .line-numbers {
+        display: grid;
+        grid-template-rows: repeat(3, 1fr);
+        border-right: 1px solid var(--faded);
+        color: var(--faded);
+      }
+
+      .stub-lines {
+        display: grid;
+        grid-template-rows: repeat(3, 1fr);
+        padding-left: 14px;
+        white-space: nowrap;
+      }
+
+      .keyword {
+        color: var(--soft-blue);
+      }
+
+      .todo {
+        color: var(--redline);
+      }
+
+      .stub-empty {
+        display: grid;
+        height: 100%;
+        place-content: center;
+        color: var(--faded);
+        font-size: 0.875rem;
+      }
+
+      .stub-empty[hidden] {
+        display: none;
+      }
+
+      dialog {
+        width: min(430px, calc(100vw - 40px));
+        border: 1px solid var(--faded);
+        border-radius: 12px;
+        padding: 0;
+        background: var(--blueprint-deep);
+        color: var(--chalk);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.52);
+      }
+
+      dialog::backdrop {
+        background: rgba(4, 13, 23, 0.66);
+        backdrop-filter: blur(2px);
+      }
+
+      .dialog-content {
+        padding: 22px;
+      }
+
+      .dialog-title {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        font-weight: 500;
+      }
+
+      .dialog-copy {
+        margin: 0 0 18px;
+        color: var(--faded);
+        font-size: 0.875rem;
+        line-height: 1.45;
+      }
+
+      .target-options {
+        display: grid;
+        gap: 8px;
+      }
+
+      .dialog-option {
+        display: flex;
+        justify-content: space-between;
+        padding: 0 12px;
+        font-family: "IBM Plex Mono", monospace;
+        text-align: left;
+      }
+
+      .dialog-option.selected {
+        border-color: var(--chalk);
+        background: var(--panel);
+        color: var(--chalk);
+      }
+
+      .dialog-field {
+        margin-top: 10px;
+      }
+
+      .dialog-field[hidden] {
+        display: none;
+      }
+
+      .state-badge {
+        color: var(--faded);
+        font-size: 0.7rem;
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .dialog-button {
+        padding: 0 14px;
+      }
+
+      .dialog-button.primary {
+        border-color: var(--chalk);
+        background: var(--chalk);
+        color: var(--blueprint-deep);
+        font-weight: 600;
+      }
+
+      .matrix-dialog {
+        width: min(820px, calc(100vw - 48px));
+      }
+
+      .matrix-wrap {
+        max-height: 55vh;
+        overflow: auto;
+      }
+
+      .matrix-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.72rem;
+      }
+
+      .matrix-table th,
+      .matrix-table td {
+        min-width: 86px;
+        border: 1px solid var(--panel-strong);
+        padding: 9px;
+        text-align: center;
+      }
+
+      .matrix-table th {
+        color: var(--faded);
+        font-weight: 400;
+      }
+
+      .matrix-table td.defined {
+        background: var(--panel);
+        color: var(--chalk);
+      }
+
+      .matrix-table td.hole {
+        box-shadow: inset 0 0 0 1px var(--redline);
+        color: var(--redline);
+      }
+
+      .matrix-table td.dismissed {
+        color: var(--faded);
+        text-decoration: line-through;
+      }
+
+      .matrix-table td.na {
+        background: repeating-linear-gradient(135deg, transparent 0 5px, rgba(108, 137, 166, 0.06) 5px 6px);
+        color: rgba(108, 137, 166, 0.5);
+      }
+
+      @keyframes ghost-pulse {
+        0%, 100% { opacity: 0.72; }
+        50% { opacity: 1; }
+      }
+
+      @keyframes draw-edge {
+        from { opacity: 0; stroke-dasharray: 18 12; }
+        to { opacity: 1; stroke-dasharray: none; }
+      }
+
+      @media (max-height: 820px) {
+        :root { --stub-h: 150px; }
+        .sentence { padding-top: 5px; padding-bottom: 5px; line-height: 1.35; }
+        .spec-content { padding-top: 10px; }
+        .gap-scroll { padding-top: 7px; }
+        .gap-card.expanded { padding-top: 10px; padding-bottom: 9px; }
+        .score-row { margin: 8px 0; }
+        .rationale { margin-bottom: 8px; }
+        .stub-code { font-size: 0.74rem; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+
+        .graph .ghost-path {
+          opacity: 1;
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell" data-state="mid" aria-label="State Gap Mapper prototype">
+      <header class="app-header">
+        <h1 class="wordmark">State Gap Mapper</h1>
+        <div class="positioning">Paste how a feature should behave. See the state machine. Find what the spec forgot.</div>
+        <button class="quiet-button docs-button" id="docsButton" type="button" aria-expanded="false" aria-controls="docsPopover">Docs</button>
+        <aside class="docs-popover" id="docsPopover" hidden>
+          <h2 class="popover-title">Prototype states</h2>
+          <p>Use these shortcuts to review the empty, active, and accepted states without a backend.</p>
+          <div class="state-shortcuts">
+            <button class="soft-button" type="button" data-prototype-state="empty">Empty</button>
+            <button class="soft-button" type="button" data-prototype-state="mid">Mid-session</button>
+            <button class="soft-button" type="button" data-prototype-state="selected">Selected</button>
+            <button class="soft-button" type="button" data-prototype-state="accepted">Accepted</button>
+            <button class="soft-button" type="button" data-prototype-state="loading">Extracting</button>
+            <button class="soft-button" type="button" data-prototype-state="refusal">Refusal</button>
+            <button class="soft-button" type="button" data-prototype-state="error">API error</button>
+            <button class="soft-button" type="button" data-prototype-state="unranked">Unranked</button>
+            <button class="soft-button" type="button" data-prototype-state="structural">Structural</button>
+            <button class="soft-button" type="button" data-prototype-state="coverage">Coverage</button>
+            <button class="soft-button" type="button" data-prototype-state="edited">Canvas edited</button>
+          </div>
+        </aside>
+      </header>
+
+      <section class="workspace">
+        <section class="pane spec-pane" data-section="spec" aria-labelledby="specHeading">
+          <h2 class="pane-header" id="specHeading">
+            <svg class="pane-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.75h8l4 4V21.25H6zM14 2.75v4h4M9 11h6M9 14h6M9 17h4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Spec
+            <button class="quiet-button header-action" id="editSpecButton" type="button">Edit spec</button>
+          </h2>
+          <div class="spec-content" id="populatedSpec">
+            <div class="sentence-list">
+              <div class="sentence" data-sentence="1"><span class="sentence-number">1</span><span>A new order starts in the Cart state.</span></div>
+              <div class="sentence" data-sentence="2"><span class="sentence-number">2</span><span>When the customer checks out, the order moves from Cart to Processing while payment is attempted.</span></div>
+              <div class="sentence" data-sentence="3"><span class="sentence-number">3</span><span>If payment succeeds, the order moves from Processing to Paid.</span></div>
+              <div class="sentence" data-sentence="4"><span class="sentence-number">4</span><span>If payment fails, the order returns from Processing to Cart so the customer can try again.</span></div>
+              <div class="sentence" data-sentence="5"><span class="sentence-number">5</span><span>The customer can cancel the order from the Cart, which moves it to Cancelled.</span></div>
+              <div class="sentence" data-sentence="6"><span class="sentence-number">6</span><span>Once a Paid order is handed to the courier, it moves to Shipped.</span></div>
+            </div>
+            <div class="spec-meta">
+              <div class="coverage">6 of 6 sentences mapped</div>
+              <div class="sample-chips" aria-label="Cached sample specs">
+                <button class="chip" type="button" data-sample="order">order checkout</button>
+                <button class="chip" type="button" data-sample="document">document approval</button>
+                <button class="chip" type="button" data-sample="account">account signup</button>
+              </div>
+              <div class="counter">312 / 4000</div>
+            </div>
+          </div>
+          <div class="empty-spec" id="emptySpec" hidden>
+            <h3 class="empty-title">Map a behavioral spec</h3>
+            <p class="empty-copy">Describe states, actors, and what happens when events occur. Or start with a cached sample.</p>
+            <textarea class="spec-textarea" id="specInput" maxlength="4000" placeholder="A new order starts in Cart. When the customer checks out, it moves to Processing..."></textarea>
+            <button class="extract-button" id="extractButton" type="button" disabled>Map this spec</button>
+            <div class="sample-chips" aria-label="Cached sample specs">
+              <button class="chip" type="button" data-sample="order">order checkout</button>
+              <button class="chip" type="button" data-sample="document">document approval</button>
+              <button class="chip" type="button" data-sample="account">account signup</button>
+            </div>
+            <div class="counter" id="emptyCounter">0 / 4000</div>
+          </div>
+        </section>
+
+        <section class="pane canvas-pane" data-section="canvas" aria-labelledby="canvasHeading">
+          <h2 class="pane-header" id="canvasHeading">
+            <svg class="pane-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4" r="2.5" fill="none" stroke="currentColor"/><circle cx="5" cy="18.5" r="2.5" fill="none" stroke="currentColor"/><circle cx="19" cy="18.5" r="2.5" fill="none" stroke="currentColor"/><path d="M12 6.5v5M5 16v-4.5h14V16" fill="none" stroke="currentColor" stroke-linecap="round"/></svg>
+            Canvas
+            <button class="quiet-button header-action" id="editMachineButton" type="button" aria-expanded="false" aria-controls="canvasInspector">Edit machine</button>
+          </h2>
+          <div class="canvas-field" id="canvasField">
+            <svg class="graph" id="graph" viewBox="0 0 760 600" role="img" aria-label="State machine with a missing cancel transition from Processing">
+              <defs>
+                <marker id="arrowChalk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0l10 5-10 5z" fill="#dde9f5" /></marker>
+                <marker id="arrowFaded" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0l10 5-10 5z" fill="#6c89a6" /></marker>
+                <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M0 0l10 5-10 5z" fill="#e8474f" /></marker>
+              </defs>
+
+              <g data-transition="checkout" aria-label="checkout transition">
+                <path class="edge-chalk" d="M171 218H297" marker-end="url(#arrowChalk)" />
+                <rect class="label-outline" x="201" y="189" width="78" height="27" rx="5" />
+                <text class="event-label" id="checkoutEventLabel" x="240" y="207">checkout</text>
+              </g>
+              <g data-transition="payment_succeeded" aria-label="payment succeeded transition">
+                <path class="edge-chalk" d="M437 218H585" marker-end="url(#arrowChalk)" />
+                <rect class="label-outline" x="454" y="188" width="128" height="27" rx="5" />
+                <text class="event-label" x="518" y="206">payment_succeeded</text>
+              </g>
+              <g data-transition="payment_failed" aria-label="payment failed transition">
+                <path class="edge-chalk" d="M367 258V292Q367 308 351 308H170Q154 308 154 292V260" marker-end="url(#arrowChalk)" />
+                <rect class="label-outline" x="222" y="315" width="132" height="27" rx="5" />
+                <text class="event-label" x="288" y="333">payment_failed</text>
+              </g>
+              <g data-transition="cart_cancel" aria-label="cancel transition from cart">
+                <path class="edge-chalk" d="M119 258V455" marker-end="url(#arrowChalk)" />
+                <rect class="label-outline" x="83" y="337" width="72" height="27" rx="5" />
+                <text class="event-label" x="119" y="355">cancel</text>
+              </g>
+              <g data-transition="handed_to_courier" aria-label="handed to courier transition">
+                <path class="edge-chalk" d="M642 258V455" marker-end="url(#arrowChalk)" />
+                <rect class="label-outline" x="560" y="368" width="164" height="27" rx="5" />
+                <text class="event-label" x="642" y="386">handed_to_courier</text>
+              </g>
+
+              <g class="ghost" aria-label="Missing cancel transition from Processing">
+                <path class="ghost-path" d="M437 236C500 248 545 282 590 330" marker-end="url(#arrowRed)" />
+                <text class="ghost-copy" x="604" y="351">???</text>
+              </g>
+
+              <g class="accepted-edge" aria-label="Accepted cancel transition">
+                <path class="edge-chalk" id="acceptedPath" d="M437 235H470Q485 235 485 250V390Q485 420 455 420H180Q154 420 154 446V455" marker-end="url(#arrowChalk)" />
+                <rect class="label-outline" id="acceptedLabelBox" x="275" y="392" width="68" height="27" rx="5" />
+                <text class="event-label" id="acceptedLabel" x="309" y="410">cancel</text>
+                <text class="added-badge" id="acceptedBadge" x="309" y="432">added by you</text>
+              </g>
+
+              <g data-node="cart" tabindex="0" aria-label="Initial state Cart">
+                <circle cx="55" cy="218" r="7" fill="#dde9f5" />
+                <path class="edge-chalk" d="M62 218H70" marker-end="url(#arrowChalk)" />
+                <rect class="node-outline" x="70" y="178" width="101" height="80" rx="10" />
+                <text class="node-label" x="120.5" y="225">cart</text>
+              </g>
+              <g data-node="processing" tabindex="0" aria-label="State Processing">
+                <rect class="node-outline" x="297" y="178" width="140" height="80" rx="10" />
+                <text class="node-label" id="processingLabel" x="367" y="225">processing</text>
+              </g>
+              <g data-node="paid" tabindex="0" aria-label="State Paid">
+                <rect class="node-outline" x="585" y="178" width="114" height="80" rx="10" />
+                <text class="node-label" x="642" y="225">paid</text>
+              </g>
+              <g data-node="cancelled" tabindex="0" aria-label="Final state Cancelled">
+                <rect class="node-outline" x="51" y="455" width="137" height="82" rx="12" />
+                <rect class="final-inner" x="57" y="461" width="125" height="70" rx="9" />
+                <text class="node-label" x="119.5" y="503">cancelled</text>
+              </g>
+              <g data-node="shipped" tabindex="0" aria-label="Final state Shipped">
+                <rect class="node-outline" x="580" y="455" width="124" height="82" rx="12" />
+                <rect class="final-inner" x="586" y="461" width="112" height="70" rx="9" />
+                <text class="node-label" x="642" y="503">shipped</text>
+              </g>
+              <g class="manual-node" data-node="new_state" tabindex="0" aria-label="User-added state New State">
+                <rect class="node-outline" x="312" y="435" width="110" height="62" rx="10" />
+                <rect class="node-outline manual-final-outline" x="318" y="441" width="98" height="50" rx="7" />
+                <text class="node-label" id="manualNodeLabel" x="367" y="470">new_state</text>
+                <text class="added-badge" x="367" y="513">added by you</text>
+              </g>
+            </svg>
+            <aside class="canvas-inspector" id="canvasInspector" hidden aria-label="Machine inspector">
+              <div class="inspector-header"><h3 class="inspector-title">Machine inspector</h3><button class="quiet-button inspector-close" id="closeInspectorButton" type="button">Close</button></div>
+              <label class="field-label">Selected state<input class="field-input" id="stateNameInput" value="processing" /></label>
+              <div class="inspector-actions">
+                <button class="soft-button" id="saveStateButton" type="button">Rename</button>
+                <button class="soft-button" id="makeInitialButton" type="button">Make initial</button>
+                <button class="soft-button" id="toggleFinalButton" type="button">Make final</button>
+              </div>
+              <h4 class="inspector-section-title">States and transitions</h4>
+              <div class="inspector-actions"><button class="soft-button" id="addStateButton" type="button">Add state</button><button class="soft-button" id="addTransitionButton" type="button">Add transition</button></div>
+              <div class="transition-row" id="checkoutTransitionRow"><span>cart · checkout → processing</span><button class="quiet-button" id="deleteTransitionButton" type="button">Delete</button></div>
+              <h4 class="inspector-section-title">Event</h4>
+              <label class="field-label">Canonical name<input class="field-input" id="eventNameInput" value="checkout" /></label>
+              <div class="inspector-actions"><button class="soft-button" id="renameEventButton" type="button">Rename event</button><button class="soft-button" id="deleteStateButton" type="button">Delete state</button></div>
+              <p class="inspector-feedback" id="inspectorFeedback" aria-live="polite">Edits validate first, then Structural Gaps recompute immediately.</p>
+            </aside>
+            <div class="canvas-status" id="canvasStatus" hidden><strong id="canvasStatusTitle"></strong><span id="canvasStatusCopy"></span><button class="soft-button" id="retryButton" type="button" hidden>Retry</button></div>
+          </div>
+          <div class="canvas-empty" id="canvasEmpty" hidden><div><strong>Your state machine will appear here.</strong><span>Start with a sample or paste a behavioral spec.</span></div></div>
+        </section>
+
+        <section class="pane gaps-pane" data-section="gaps" aria-labelledby="gapsHeading">
+          <h2 class="pane-header" id="gapsHeading">
+            <svg class="pane-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6 22 20.5H2zM12 8v5.5M12 17.5v.2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            <span id="gapHeadingText">Gaps (10)</span>
+            <button class="quiet-button header-action" id="rerankButton" type="button">Re-rank</button>
+          </h2>
+          <div class="gap-scroll" id="gapPopulated">
+            <h3 class="gap-section-heading">Missing Transitions</h3>
+            <div class="ranking-note" id="rankingNote" hidden><span>Ranking unavailable. Structural Gaps remain visible as Unranked.</span></div>
+            <div class="edit-gap-card" id="editGapCard" hidden><span class="unranked-tag">Unranked · new from edit</span><p class="pair" id="editGapPair">new_state x checkout</p></div>
+            <article class="gap-card expanded" id="flagshipCard" data-section="flagship-gap" tabindex="0" aria-label="Structural gap processing cancel">
+              <p class="redline-label" id="flagshipLabel">REDLINE</p>
+              <p class="pair">processing x cancel</p>
+              <div class="score-row" aria-label="Relevance 0.92"><div class="score-track"><div class="score-fill"></div></div><span class="score">0.92</span></div>
+              <p class="rationale">Cancel is handled in Cart but Processing never defines it.</p>
+              <div class="card-footer">
+                <span class="evidence-chip">S2</span><span class="evidence-chip">S5</span>
+                <div class="card-actions"><button class="quiet-button" id="acceptButton" type="button">Accept</button><button class="quiet-button" id="dismissButton" type="button">Dismiss</button></div>
+              </div>
+            </article>
+
+            <div class="dismissed-row" id="dismissedRow" hidden><span class="pair">processing x cancel</span><button class="quiet-button" id="undoDismissButton" type="button">Undo</button></div>
+
+            <article class="gap-card compact"><button class="gap-toggle" type="button" aria-expanded="false"><span class="pair">cart x payment_succeeded</span><span class="chevron" aria-hidden="true"></span></button></article>
+            <article class="gap-card compact"><button class="gap-toggle" type="button" aria-expanded="false"><span class="pair">paid x checkout</span><span class="chevron" aria-hidden="true"></span></button></article>
+
+            <div class="structural-sections" id="structuralSections" hidden>
+              <div class="section-rule"></div>
+              <h3 class="gap-section-heading">Unreachable States</h3>
+              <article class="structural-card"><span class="structural-label">Structural · Unranked</span><p class="pair" id="structuralUnreachableName">new_state</p></article>
+              <h3 class="gap-section-heading">Dead-End States</h3>
+              <article class="structural-card"><span class="structural-label">Structural · Unranked</span><p class="pair" id="structuralDeadEndName">new_state</p></article>
+            </div>
+
+            <div class="section-rule"></div>
+            <h3 class="suggestion-heading">Suggested (1)</h3>
+            <article class="suggestion-card" id="suggestionCard">
+              <p class="suggestion-name">payment_timeout</p>
+              <span class="suggested-tag" id="suggestedTag">Suggested</span><span class="confidence" id="suggestionConfidence">Confidence 0.71</span>
+              <div class="suggestion-actions"><button class="quiet-button" id="suggestButton" type="button">Add event</button></div>
+            </article>
+            <button class="quiet-button matrix-link" id="matrixButton" type="button">Show all 10 undefined pairs</button>
+          </div>
+          <div class="gap-empty" id="gapEmpty" hidden>No Structural Gaps yet.<br />They will appear after a spec is mapped.</div>
+        </section>
+      </section>
+
+      <section class="stubs-drawer" id="stubsDrawer" data-section="stubs" aria-labelledby="stubsHeading">
+        <header class="stub-header">
+          <svg class="pane-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2.5h6M10 2.5v6L4.4 18.3A2 2 0 0 0 6.1 21h11.8a2 2 0 0 0 1.7-2.7L14 8.5v-6M8.2 12h7.6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span class="stub-title" id="stubsHeading">Test Stubs (1)</span>
+          <button class="quiet-button stub-toggle" id="stubToggle" type="button" aria-expanded="true" aria-label="Collapse Test Stubs"><span class="chevron" aria-hidden="true"></span></button>
+        </header>
+        <div class="stub-body">
+          <div class="stub-strip" id="stubStrip">
+            <button class="copy-button" id="copyButton" type="button">Copy</button>
+            <span class="copy-feedback" id="copyFeedback" aria-live="polite"></span>
+            <div class="stub-code" aria-label="Gherkin test stub">
+              <div class="line-numbers" aria-hidden="true"><span>1</span><span>2</span><span>3</span></div>
+              <div class="stub-lines" id="stubLines">
+                <span><span class="keyword">Given</span> the system is in state Processing</span>
+                <span><span class="keyword">When</span> cancel occurs</span>
+                <span id="stubThen"><span class="keyword">Then</span> <span class="todo">&lt;TODO: define target&gt;</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="stub-empty" id="stubEmpty" hidden>No Test Stubs yet. Accept a Structural Gap to draft one.</div>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="acceptDialog" aria-labelledby="acceptDialogTitle">
+      <form class="dialog-content" method="dialog">
+        <h2 class="dialog-title" id="acceptDialogTitle">Where should cancel lead?</h2>
+        <p class="dialog-copy">Choose the expected target. Cancelled is suggested from the existing spec.</p>
+        <div class="target-options" role="radiogroup" aria-label="Target state">
+          <button class="dialog-option selected" type="button" role="radio" aria-checked="true" data-target="cancelled"><span>cancelled</span><span class="state-badge">Suggested</span></button>
+          <button class="dialog-option" type="button" role="radio" aria-checked="false" data-target="cart"><span>cart</span><span class="state-badge">Existing state</span></button>
+          <button class="dialog-option" type="button" role="radio" aria-checked="false" data-target="new"><span>Create a new state</span><span class="state-badge">Added by you</span></button>
+        </div>
+        <label class="field-label dialog-field" id="newTargetField" hidden>New state name<input class="field-input" id="newTargetInput" placeholder="refunded" /></label>
+        <div class="dialog-actions"><button class="dialog-button" type="submit" value="cancel">Cancel</button><button class="dialog-button primary" id="confirmAcceptButton" type="button">Add transition</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="addStateDialog" aria-labelledby="addStateDialogTitle">
+      <form class="dialog-content" method="dialog">
+        <h2 class="dialog-title" id="addStateDialogTitle">Add a state</h2>
+        <p class="dialog-copy">New states carry no Evidence and are marked Added by you.</p>
+        <label class="field-label">State name<input class="field-input" id="addStateNameInput" value="Manual review" /></label>
+        <div class="dialog-actions"><button class="dialog-button" type="submit">Cancel</button><button class="dialog-button primary" id="confirmAddStateButton" type="button">Add state</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="addTransitionDialog" aria-labelledby="addTransitionDialogTitle">
+      <form class="dialog-content" method="dialog">
+        <h2 class="dialog-title" id="addTransitionDialogTitle">Add a transition</h2>
+        <p class="dialog-copy">The command validates the complete machine before applying the edge.</p>
+        <label class="field-label">From<select class="field-select" id="transitionFrom"><option value="processing">processing</option><option value="cart">cart</option><option value="paid">paid</option></select></label>
+        <label class="field-label">When<select class="field-select" id="transitionEvent"><option value="cancel">cancel</option><option value="new">Create a new event</option></select></label>
+        <label class="field-label dialog-field" id="newEventField" hidden>New event name<input class="field-input" id="newEventInput" placeholder="refund_requested" /></label>
+        <label class="field-label">To<select class="field-select" id="transitionTo"><option value="cancelled">cancelled</option><option value="cart">cart</option><option value="paid">paid</option><option value="new_state">new_state</option></select></label>
+        <div class="dialog-actions"><button class="dialog-button" type="submit">Cancel</button><button class="dialog-button primary" id="confirmAddTransitionButton" type="button">Add transition</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="dirtyDialog" aria-labelledby="dirtyDialogTitle">
+      <form class="dialog-content" method="dialog">
+        <h2 class="dialog-title" id="dirtyDialogTitle">Replace your canvas edits?</h2>
+        <p class="dialog-copy">Extracting again will replace your edits. Continue?</p>
+        <div class="dialog-actions"><button class="dialog-button" type="submit">Keep editing</button><button class="dialog-button primary" id="confirmDirtyReplaceButton" type="button">Replace and continue</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="matrix-dialog" id="matrixDialog" aria-labelledby="matrixDialogTitle">
+      <form class="dialog-content" method="dialog">
+        <h2 class="dialog-title" id="matrixDialogTitle">State x event matrix</h2>
+        <p class="dialog-copy">Every undefined pair remains visible. Final-state cells are not applicable.</p>
+        <div class="matrix-wrap">
+          <table class="matrix-table">
+            <thead><tr><th>state</th><th>checkout</th><th>payment_succeeded</th><th>payment_failed</th><th>cancel</th><th>handed_to_courier</th></tr></thead>
+            <tbody>
+              <tr><th>cart</th><td class="defined" id="matrixCartCheckout">drawn</td><td class="hole">hole</td><td class="hole">hole</td><td class="defined">drawn</td><td class="hole">hole</td></tr>
+              <tr><th>processing</th><td class="hole">hole</td><td class="defined">drawn</td><td class="defined">drawn</td><td class="hole" id="matrixFlagship">hole</td><td class="hole">hole</td></tr>
+              <tr><th>paid</th><td class="hole">hole</td><td class="hole">hole</td><td class="hole">hole</td><td class="hole">hole</td><td class="defined">drawn</td></tr>
+              <tr><th>cancelled</th><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td></tr>
+              <tr><th>shipped</th><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="dialog-actions"><button class="dialog-button primary" type="submit">Close</button></div>
+      </form>
+    </dialog>
+
+    <script>
+      const byId = (id) => document.getElementById(id);
+      const app = document.querySelector(".app-shell");
+      const docsButton = byId("docsButton");
+      const docsPopover = byId("docsPopover");
+      const populatedSpec = byId("populatedSpec");
+      const emptySpec = byId("emptySpec");
+      const editSpecButton = byId("editSpecButton");
+      const canvasField = byId("canvasField");
+      const canvasEmpty = byId("canvasEmpty");
+      const canvasStatus = byId("canvasStatus");
+      const canvasStatusTitle = byId("canvasStatusTitle");
+      const canvasStatusCopy = byId("canvasStatusCopy");
+      const retryButton = byId("retryButton");
+      const graph = byId("graph");
+      const editMachineButton = byId("editMachineButton");
+      const canvasInspector = byId("canvasInspector");
+      const gapPopulated = byId("gapPopulated");
+      const gapEmpty = byId("gapEmpty");
+      const gapHeadingText = byId("gapHeadingText");
+      const rerankButton = byId("rerankButton");
+      const rankingNote = byId("rankingNote");
+      const editGapCard = byId("editGapCard");
+      const editGapPair = byId("editGapPair");
+      const structuralSections = byId("structuralSections");
+      const flagshipCard = byId("flagshipCard");
+      const flagshipLabel = byId("flagshipLabel");
+      const flagshipScore = flagshipCard.querySelector(".score-row");
+      const flagshipRationale = flagshipCard.querySelector(".rationale");
+      const acceptButton = byId("acceptButton");
+      const dismissButton = byId("dismissButton");
+      const dismissedRow = byId("dismissedRow");
+      const undoDismissButton = byId("undoDismissButton");
+      const acceptDialog = byId("acceptDialog");
+      const confirmAcceptButton = byId("confirmAcceptButton");
+      const newTargetField = byId("newTargetField");
+      const newTargetInput = byId("newTargetInput");
+      const acceptedPath = byId("acceptedPath");
+      const acceptedLabelBox = byId("acceptedLabelBox");
+      const acceptedLabel = byId("acceptedLabel");
+      const acceptedBadge = byId("acceptedBadge");
+      const matrixButton = byId("matrixButton");
+      const matrixDialog = byId("matrixDialog");
+      const matrixFlagship = byId("matrixFlagship");
+      const matrixCartCheckout = byId("matrixCartCheckout");
+      const suggestionCard = byId("suggestionCard");
+      const suggestedTag = byId("suggestedTag");
+      const suggestionConfidence = byId("suggestionConfidence");
+      const suggestButton = byId("suggestButton");
+      const stubsDrawer = byId("stubsDrawer");
+      const stubToggle = byId("stubToggle");
+      const stubStrip = byId("stubStrip");
+      const stubEmpty = byId("stubEmpty");
+      const stubThen = byId("stubThen");
+      const stubsHeading = byId("stubsHeading");
+      const copyButton = byId("copyButton");
+      const copyFeedback = byId("copyFeedback");
+      const specInput = byId("specInput");
+      const emptyCounter = byId("emptyCounter");
+      const extractButton = byId("extractButton");
+      const addStateDialog = byId("addStateDialog");
+      const addTransitionDialog = byId("addTransitionDialog");
+      const dirtyDialog = byId("dirtyDialog");
+      const stateNameInput = byId("stateNameInput");
+      const processingLabel = byId("processingLabel");
+      const manualNodeLabel = byId("manualNodeLabel");
+      const structuralUnreachableName = byId("structuralUnreachableName");
+      const structuralDeadEndName = byId("structuralDeadEndName");
+      const inspectorFeedback = byId("inspectorFeedback");
+      const eventNameInput = byId("eventNameInput");
+      const checkoutEventLabel = byId("checkoutEventLabel");
+      const checkoutTransitionRow = byId("checkoutTransitionRow");
+      const deleteStateButton = byId("deleteStateButton");
+      const transitionEvent = byId("transitionEvent");
+      const newEventField = byId("newEventField");
+      const newEventInput = byId("newEventInput");
+
+      const activeSpecText = "A new order starts in the Cart state.\nWhen the customer checks out, the order moves from Cart to Processing while payment is attempted.\nIf payment succeeds, the order moves from Processing to Paid.\nIf payment fails, the order returns from Processing to Cart so the customer can try again.\nThe customer can cancel the order from the Cart, which moves it to Cancelled.\nOnce a Paid order is handed to the courier, it moves to Shipped.";
+
+      let currentState = "mid";
+      let currentTargetName = null;
+      let selectedNodeId = "processing";
+      let dirty = false;
+      let pendingReplacement = null;
+
+      function closeDocs() {
+        docsPopover.hidden = true;
+        docsButton.setAttribute("aria-expanded", "false");
+      }
+
+      function setSelected(selected) {
+        graph.classList.toggle("selected-gap", selected);
+        document.querySelectorAll('[data-sentence="2"], [data-sentence="5"]').forEach((row) => row.classList.toggle("selected", selected));
+      }
+
+      function setGapCount(count) {
+        gapHeadingText.textContent = `Gaps (${count})`;
+      }
+
+      function setMatrixCell(cell, className, text) {
+        cell.className = className;
+        cell.textContent = text;
+      }
+
+      function setInspectorFeedback(message, error = false) {
+        inspectorFeedback.textContent = message;
+        inspectorFeedback.classList.toggle("error", error);
+      }
+
+      function setSvgLabel(element, text, maxLength = 12, fitWidth = 116) {
+        element.textContent = text;
+        if (text.length > maxLength) {
+          element.setAttribute("textLength", String(fitWidth));
+          element.setAttribute("lengthAdjust", "spacingAndGlyphs");
+        } else {
+          element.removeAttribute("textLength");
+          element.removeAttribute("lengthAdjust");
+        }
+      }
+
+      function resetFixture() {
+        dirty = false;
+        currentTargetName = null;
+        graph.classList.remove("accepted", "edited", "edge-deleted", "manual-final", "processing-deleted");
+        graph.querySelectorAll("[data-node]").forEach((node) => node.classList.remove("selected-node"));
+        setSvgLabel(processingLabel, "processing");
+        setSvgLabel(manualNodeLabel, "new_state", 10, 88);
+        structuralUnreachableName.textContent = "new_state";
+        structuralDeadEndName.textContent = "new_state";
+        setSvgLabel(checkoutEventLabel, "checkout", 9, 62);
+        checkoutTransitionRow.hidden = false;
+        checkoutTransitionRow.querySelector("span").textContent = "cart · checkout → processing";
+        stateNameInput.value = "processing";
+        eventNameInput.value = "checkout";
+        canvasInspector.hidden = true;
+        editMachineButton.setAttribute("aria-expanded", "false");
+        flagshipCard.hidden = false;
+        dismissedRow.hidden = true;
+        rankingNote.hidden = true;
+        editGapCard.hidden = true;
+        structuralSections.hidden = true;
+        flagshipLabel.textContent = "REDLINE";
+        flagshipScore.hidden = false;
+        flagshipRationale.textContent = "Cancel is handled in Cart but Processing never defines it.";
+        suggestedTag.textContent = "Suggested";
+        suggestionConfidence.textContent = "Confidence 0.71";
+        suggestButton.hidden = false;
+        setMatrixCell(matrixFlagship, "hole", "hole");
+        setMatrixCell(matrixCartCheckout, "defined", "drawn");
+        document.querySelectorAll(".sentence").forEach((row) => {
+          row.classList.remove("selected", "uncovered");
+          row.removeAttribute("title");
+        });
+        document.querySelector(".coverage").textContent = "6 of 6 sentences mapped";
+        stubThen.innerHTML = '<span class="keyword">Then</span> <span class="todo">&lt;TODO: define target&gt;</span>';
+        copyFeedback.textContent = "";
+        setSelected(false);
+      }
+
+      function applyAcceptedEdge(target, markDirty = true, eventName = "cancel") {
+        const targetName = target === "new" ? (newTargetInput.value.trim() || "new_state") : target;
+        currentTargetName = targetName;
+        currentState = "accepted";
+        app.dataset.state = "accepted";
+        graph.classList.add("accepted");
+        flagshipCard.hidden = true;
+        dismissedRow.hidden = true;
+        setGapCount(9);
+        setMatrixCell(matrixFlagship, "defined", "drawn");
+        setSvgLabel(acceptedLabel, eventName, 9, 56);
+        acceptedBadge.textContent = "added by you";
+
+        if (target === "cart") {
+          acceptedPath.setAttribute("d", "M297 240C252 252 221 255 173 240");
+          acceptedLabelBox.setAttribute("x", "220");
+          acceptedLabelBox.setAttribute("y", "250");
+          acceptedLabel.setAttribute("x", "254");
+          acceptedLabel.setAttribute("y", "268");
+          acceptedBadge.setAttribute("x", "254");
+          acceptedBadge.setAttribute("y", "286");
+        } else if (target === "new") {
+          graph.classList.add("edited");
+          const slug = targetName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "new_state";
+          setSvgLabel(manualNodeLabel, slug, 10, 88);
+          structuralUnreachableName.textContent = slug;
+          structuralDeadEndName.textContent = slug;
+          acceptedPath.setAttribute("d", "M367 258V425");
+          acceptedLabelBox.setAttribute("x", "379");
+          acceptedLabelBox.setAttribute("y", "334");
+          acceptedLabel.setAttribute("x", "413");
+          acceptedLabel.setAttribute("y", "352");
+          acceptedBadge.setAttribute("x", "413");
+          acceptedBadge.setAttribute("y", "371");
+        } else {
+          acceptedPath.setAttribute("d", "M437 235H470Q485 235 485 250V390Q485 420 455 420H180Q154 420 154 446V455");
+          acceptedLabelBox.setAttribute("x", "275");
+          acceptedLabelBox.setAttribute("y", "392");
+          acceptedLabel.setAttribute("x", "309");
+          acceptedLabel.setAttribute("y", "410");
+          acceptedBadge.setAttribute("x", "309");
+          acceptedBadge.setAttribute("y", "432");
+        }
+
+        const readableTarget = targetName.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+        stubThen.innerHTML = `<span class="keyword">Then</span> the system moves to ${readableTarget}`;
+        if (markDirty) dirty = true;
+      }
+
+      function setState(state) {
+        resetFixture();
+        currentState = state;
+        app.dataset.state = state;
+        const editorState = ["empty", "loading", "refusal"].includes(state);
+        const noResultState = ["empty", "loading", "refusal"].includes(state);
+
+        populatedSpec.hidden = editorState;
+        emptySpec.hidden = !editorState;
+        canvasField.hidden = state === "empty";
+        canvasEmpty.hidden = state !== "empty";
+        canvasStatus.hidden = !["loading", "refusal", "error"].includes(state);
+        gapPopulated.hidden = noResultState;
+        gapEmpty.hidden = !noResultState;
+        stubStrip.hidden = noResultState;
+        stubEmpty.hidden = !noResultState;
+        rerankButton.disabled = noResultState;
+        setGapCount(noResultState ? 0 : 10);
+        stubsHeading.textContent = noResultState ? "Test Stubs (0)" : "Test Stubs (1)";
+        gapEmpty.innerHTML = state === "loading"
+          ? "Structural analysis starts after extraction completes."
+          : state === "refusal"
+            ? "No machine was created from this input."
+            : "No Structural Gaps yet.<br />They will appear after a spec is mapped.";
+
+        if (state === "loading") {
+          canvasStatusTitle.textContent = "Extracting your state machine";
+          canvasStatusCopy.textContent = "This takes a few seconds. Structural Gaps will render before optional ranking metadata.";
+          retryButton.hidden = true;
+        } else if (state === "refusal") {
+          canvasStatusTitle.textContent = "This does not look like a behavioral spec";
+          canvasStatusCopy.textContent = "Describe states, actors, and what happens when an event occurs. The input was left intact so you can revise it.";
+          retryButton.hidden = true;
+        } else if (state === "error") {
+          canvasStatusTitle.textContent = "We could not reach the model";
+          canvasStatusCopy.textContent = "Your previous machine is still intact. Retry when the connection is available.";
+          retryButton.hidden = false;
+        }
+
+        if (state === "selected") setSelected(true);
+        if (state === "accepted") applyAcceptedEdge("cancelled", false);
+        if (state === "unranked") {
+          rankingNote.hidden = false;
+          flagshipLabel.textContent = "UNRANKED";
+          flagshipScore.hidden = true;
+          flagshipRationale.textContent = "The Structural Gap remains visible while ranking is unavailable.";
+        }
+        if (state === "structural") {
+          graph.classList.add("edited");
+          structuralSections.hidden = false;
+          setGapCount(12);
+        }
+        if (state === "coverage") {
+          const row = document.querySelector('[data-sentence="6"]');
+          row.classList.add("uncovered");
+          row.title = "This sentence did not map to any state, event, or transition.";
+          document.querySelector(".coverage").textContent = "5 of 6 sentences mapped";
+        }
+        if (state === "edited") {
+          graph.classList.add("edited");
+          editGapCard.hidden = false;
+          structuralSections.hidden = false;
+          rankingNote.hidden = false;
+          rankingNote.firstElementChild.textContent = "Canvas changed. New holes are Unranked until you choose Re-rank.";
+          setGapCount(17);
+          dirty = true;
+        }
+        closeDocs();
+      }
+
+      function openInspector(nodeId = "processing") {
+        selectedNodeId = nodeId;
+        graph.querySelectorAll("[data-node]").forEach((node) => node.classList.toggle("selected-node", node.dataset.node === nodeId));
+        stateNameInput.value = nodeId === "processing" ? processingLabel.textContent : nodeId === "new_state" ? manualNodeLabel.textContent : nodeId;
+        deleteStateButton.title = nodeId === "cart" ? "The initial state cannot be deleted. Choose another initial state first." : "Delete the selected state and its incident transitions";
+        canvasInspector.hidden = false;
+        editMachineButton.setAttribute("aria-expanded", "true");
+        setInspectorFeedback("Edits validate first, then Structural Gaps recompute immediately.");
+      }
+
+      function requestReplacement(action) {
+        if (!dirty) {
+          action();
+          return;
+        }
+        pendingReplacement = action;
+        dirtyDialog.showModal();
+      }
+
+      docsButton.addEventListener("click", () => {
+        const opening = docsPopover.hidden;
+        docsPopover.hidden = !opening;
+        docsButton.setAttribute("aria-expanded", String(opening));
+      });
+      document.querySelectorAll("[data-prototype-state]").forEach((button) => button.addEventListener("click", () => setState(button.dataset.prototypeState)));
+      document.querySelectorAll("[data-sample]").forEach((button) => button.addEventListener("click", () => requestReplacement(() => setState("mid"))));
+
+      editSpecButton.addEventListener("click", () => requestReplacement(() => {
+        setState("empty");
+        specInput.value = activeSpecText;
+        specInput.dispatchEvent(new Event("input"));
+        specInput.focus();
+      }));
+      byId("confirmDirtyReplaceButton").addEventListener("click", () => {
+        dirtyDialog.close();
+        const action = pendingReplacement;
+        pendingReplacement = null;
+        action?.();
+      });
+
+      flagshipCard.addEventListener("click", (event) => {
+        if (event.target.closest("button")) return;
+        setSelected(!graph.classList.contains("selected-gap"));
+        currentState = graph.classList.contains("selected-gap") ? "selected" : "mid";
+      });
+      flagshipCard.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setSelected(!graph.classList.contains("selected-gap"));
+        }
+      });
+
+      acceptButton.addEventListener("click", () => acceptDialog.showModal());
+      document.querySelectorAll(".dialog-option").forEach((option) => option.addEventListener("click", () => {
+        document.querySelectorAll(".dialog-option").forEach((candidate) => {
+          const selected = candidate === option;
+          candidate.classList.toggle("selected", selected);
+          candidate.setAttribute("aria-checked", String(selected));
+        });
+        const isNew = option.dataset.target === "new";
+        newTargetField.hidden = !isNew;
+        confirmAcceptButton.disabled = isNew && !newTargetInput.value.trim();
+        if (isNew) newTargetInput.focus();
+      }));
+      newTargetInput.addEventListener("input", () => {
+        confirmAcceptButton.disabled = !newTargetInput.value.trim();
+      });
+      confirmAcceptButton.addEventListener("click", () => {
+        const selected = document.querySelector(".dialog-option.selected").dataset.target;
+        acceptDialog.close();
+        applyAcceptedEdge(selected);
+      });
+
+      dismissButton.addEventListener("click", () => {
+        flagshipCard.hidden = true;
+        dismissedRow.hidden = false;
+        setGapCount(9);
+        setSelected(false);
+        setMatrixCell(matrixFlagship, "dismissed", "dismissed");
+      });
+      undoDismissButton.addEventListener("click", () => {
+        flagshipCard.hidden = false;
+        dismissedRow.hidden = true;
+        setGapCount(10);
+        setMatrixCell(matrixFlagship, "hole", "hole");
+      });
+
+      document.querySelectorAll(".gap-toggle").forEach((button) => button.addEventListener("click", () => {
+        const expanded = button.getAttribute("aria-expanded") === "true";
+        button.setAttribute("aria-expanded", String(!expanded));
+        const pair = button.querySelector(".pair");
+        if (!pair.dataset.original) pair.dataset.original = pair.textContent;
+        pair.textContent = expanded ? pair.dataset.original : `${pair.dataset.original} · Unranked`;
+      }));
+
+      suggestButton.addEventListener("click", () => {
+        suggestedTag.textContent = "Added";
+        suggestionConfidence.textContent = "5 new Structural Gaps";
+        suggestButton.hidden = true;
+        editGapCard.hidden = false;
+        editGapPair.textContent = "processing x payment_timeout";
+        setGapCount(15);
+        dirty = true;
+      });
+      matrixButton.addEventListener("click", () => matrixDialog.showModal());
+
+      rerankButton.addEventListener("click", () => {
+        rerankButton.disabled = true;
+        rerankButton.textContent = "Ranking…";
+        rankingNote.hidden = false;
+        rankingNote.firstElementChild.textContent = "Structural Gaps stay visible while relevance metadata loads.";
+        window.setTimeout(() => {
+          rerankButton.disabled = false;
+          rerankButton.textContent = "Re-rank";
+          rankingNote.hidden = true;
+          flagshipLabel.textContent = "REDLINE";
+          flagshipScore.hidden = false;
+          flagshipRationale.textContent = "Cancel is handled in Cart but Processing never defines it.";
+        }, 650);
+      });
+
+      editMachineButton.addEventListener("click", () => canvasInspector.hidden ? openInspector("processing") : byId("closeInspectorButton").click());
+      byId("closeInspectorButton").addEventListener("click", () => {
+        canvasInspector.hidden = true;
+        editMachineButton.setAttribute("aria-expanded", "false");
+        graph.querySelectorAll("[data-node]").forEach((node) => node.classList.remove("selected-node"));
+      });
+      graph.querySelectorAll("[data-node]").forEach((node) => {
+        node.addEventListener("click", () => {
+          selectedNodeId = node.dataset.node;
+          graph.querySelectorAll("[data-node]").forEach((candidate) => candidate.classList.toggle("selected-node", candidate === node));
+        });
+        node.addEventListener("dblclick", () => openInspector(node.dataset.node));
+        node.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") openInspector(node.dataset.node);
+        });
+      });
+
+      byId("saveStateButton").addEventListener("click", () => {
+        const name = stateNameInput.value.trim();
+        if (!name) return setInspectorFeedback("State names cannot be blank.", true);
+        if (selectedNodeId === "processing") setSvgLabel(processingLabel, name);
+        if (selectedNodeId === "new_state") setSvgLabel(manualNodeLabel, name, 10, 88);
+        dirty = true;
+        setInspectorFeedback("State renamed. IDs remain stable; Structural Gaps recomputed.");
+      });
+      byId("makeInitialButton").addEventListener("click", () => {
+        dirty = true;
+        setInspectorFeedback(`Prototype scaffold: setInitial validates ${stateNameInput.value.trim()} and keeps exactly one initial state.`);
+      });
+      byId("toggleFinalButton").addEventListener("click", () => {
+        if (selectedNodeId !== "new_state") return setInspectorFeedback("Remove outgoing transitions before marking this state final.", true);
+        graph.classList.toggle("manual-final");
+        dirty = true;
+        setInspectorFeedback(graph.classList.contains("manual-final") ? "New state marked final. Its undefined matrix row is now not applicable." : "New state changed back to non-final.");
+      });
+      byId("addStateButton").addEventListener("click", () => addStateDialog.showModal());
+      byId("confirmAddStateButton").addEventListener("click", () => {
+        const raw = byId("addStateNameInput").value.trim();
+        if (!raw) return;
+        const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "new_state";
+        setSvgLabel(manualNodeLabel, slug, 10, 88);
+        structuralUnreachableName.textContent = slug;
+        structuralDeadEndName.textContent = slug;
+        graph.classList.add("edited");
+        editGapCard.hidden = false;
+        editGapPair.textContent = `${slug} x checkout`;
+        structuralSections.hidden = false;
+        rankingNote.hidden = false;
+        rankingNote.firstElementChild.textContent = "Canvas changed. New holes are Unranked until you choose Re-rank.";
+        setGapCount(17);
+        dirty = true;
+        addStateDialog.close();
+        openInspector("new_state");
+        setInspectorFeedback("State added with no Evidence. Seven Structural Gaps appeared immediately.");
+      });
+      deleteStateButton.addEventListener("click", () => {
+        if (selectedNodeId === "cart") return setInspectorFeedback("The initial state cannot be deleted. Choose another initial state first.", true);
+        if (selectedNodeId !== "new_state") return setInspectorFeedback("Prototype placeholder: production deletes this state and all incident transitions atomically.");
+        graph.classList.remove("edited", "manual-final");
+        editGapCard.hidden = true;
+        structuralSections.hidden = true;
+        rankingNote.hidden = true;
+        setGapCount(10);
+        dirty = true;
+        openInspector("processing");
+        setInspectorFeedback("User-added state deleted. Its incident gaps disappeared.");
+      });
+
+      byId("addTransitionButton").addEventListener("click", () => addTransitionDialog.showModal());
+      transitionEvent.addEventListener("change", () => {
+        newEventField.hidden = transitionEvent.value !== "new";
+      });
+      byId("confirmAddTransitionButton").addEventListener("click", () => {
+        const eventName = transitionEvent.value === "new" ? newEventInput.value.trim() : transitionEvent.value;
+        if (!eventName) return;
+        const target = byId("transitionTo").value;
+        addTransitionDialog.close();
+        if (byId("transitionFrom").value === "processing" && eventName === "cancel") {
+          applyAcceptedEdge(target === "new_state" ? "new" : target, true, eventName);
+          setInspectorFeedback("Transition added. The processing x cancel hole disappeared immediately.");
+        } else {
+          dirty = true;
+          editGapCard.hidden = false;
+          editGapPair.textContent = `${byId("transitionFrom").value} x ${eventName}`;
+          setGapCount(14);
+          setInspectorFeedback("Transition and event added after validation. New undefined pairs are listed as Unranked.");
+        }
+      });
+      byId("deleteTransitionButton").addEventListener("click", () => {
+        graph.classList.add("edge-deleted");
+        checkoutTransitionRow.hidden = true;
+        editGapCard.hidden = false;
+        editGapPair.textContent = "cart x checkout";
+        setMatrixCell(matrixCartCheckout, "hole", "hole");
+        setGapCount(11);
+        dirty = true;
+        setInspectorFeedback("Transition deleted. cart x checkout appeared as an Unranked Structural Gap.");
+      });
+      byId("renameEventButton").addEventListener("click", () => {
+        const name = eventNameInput.value.trim();
+        if (!name) return setInspectorFeedback("Event names cannot be blank.", true);
+        setSvgLabel(checkoutEventLabel, name, 9, 62);
+        checkoutTransitionRow.querySelector("span").textContent = `cart · ${name} → processing`;
+        dirty = true;
+        setInspectorFeedback("Event renamed with a stable canonical ID. Structural Gaps recomputed.");
+      });
+
+      stubToggle.addEventListener("click", () => {
+        const expanded = stubToggle.getAttribute("aria-expanded") === "true";
+        stubsDrawer.classList.toggle("collapsed", expanded);
+        stubToggle.setAttribute("aria-expanded", String(!expanded));
+        stubToggle.setAttribute("aria-label", expanded ? "Expand Test Stubs" : "Collapse Test Stubs");
+      });
+      copyButton.addEventListener("click", async () => {
+        const outcome = currentTargetName ? `Then the system moves to ${currentTargetName.replaceAll("_", " ")}` : "Then <TODO: define target>";
+        const stub = `# Evidence: sentences 2, 5\nGiven the system is in state Processing\nWhen cancel occurs\n${outcome}`;
+        try {
+          if (window.__forceCopyFailure) throw new Error("forced copy failure");
+          await navigator.clipboard.writeText(stub);
+          copyButton.textContent = "Copied";
+          copyFeedback.textContent = "";
+        } catch {
+          copyButton.textContent = "Copy failed";
+          copyFeedback.textContent = "Copy failed, select the text manually";
+        }
+        window.setTimeout(() => { copyButton.textContent = "Copy"; copyFeedback.textContent = ""; }, 1800);
+      });
+
+      specInput.addEventListener("input", () => {
+        emptyCounter.textContent = `${specInput.value.length} / 4000`;
+        extractButton.disabled = specInput.value.trim().length === 0;
+      });
+      extractButton.addEventListener("click", () => {
+        setState("loading");
+        window.setTimeout(() => setState("mid"), 700);
+      });
+      retryButton.addEventListener("click", () => {
+        setState("loading");
+        window.setTimeout(() => setState("mid"), 700);
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!docsPopover.hidden && !docsPopover.contains(event.target) && event.target !== docsButton) closeDocs();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !docsPopover.hidden) {
+          closeDocs();
+          docsButton.focus();
+        }
+      });
+    </script>
+  </body>
+</html>

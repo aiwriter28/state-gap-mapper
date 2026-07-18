@@ -1,4 +1,4 @@
-# State Gap Mapper Implementation Plan (rev 4, final: gate exhausted at 3 iterations; iteration-3 fixes applied, residual risk documented at the end)
+# State Gap Mapper Implementation Plan (rev 5: frontend-first design gate added; rev-4 engineering contracts unchanged)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
@@ -36,6 +36,11 @@
 state-gap-mapper/
 ├── index.html, vite.config.ts, tsconfig.json, package.json, vercel.json
 ├── .env.example                      # OPENAI_API_KEY=
+├── design-samples/
+│   ├── state-gap-mapper.html         # approved live-DOM/SVG visual and interaction contract
+│   ├── qa-prototype.cjs              # Playwright visual/interaction gate
+│   ├── interaction-contract.md       # plan-to-control map + dynamic-canvas binding contract
+│   └── verification/                 # target-view screenshots + QA report
 ├── api/
 │   └── llm.ts                        # POST /api/llm  {op:"extract"|"rank", ...} single function:
 │                                     # shared limiter is real within a warm instance
@@ -139,6 +144,38 @@ If the code is entered incorrectly three times, the account moves to Locked.
 A support agent can unlock a Locked account, returning it to Unverified.
 An Active account can be deactivated by its owner, moving it to Deactivated.
 ```
+
+---
+
+## Pre-implementation design gate (Task 0)
+
+This gate is a design artifact, not production app code, and therefore does not dilute the
+hackathon requirement that the single clean Codex implementation session contain the majority
+of core functionality. Production React conversion and all product wiring remain inside that
+implementation session.
+
+**Binding visual sources, in precedence order:** `DESIGN.md`; `mockups/var-a-minimal.png` for
+minimal canvas character; `mockups/hero-v2.png` for full-screen composition; component crops
+for Structural Gap, accept conversion, and Test Stub anatomy.
+
+**Files:** `design-samples/state-gap-mapper.html`, `design-samples/qa-prototype.cjs`,
+`design-samples/verification/*`.
+
+- [x] Build a standalone live HTML/CSS/SVG prototype. No screenshot is used as UI; text,
+  graph nodes/edges, cards, buttons, drawers, dialogs, textarea, and matrix are live controls.
+- [x] Scaffold fixture-driven empty, extraction, refusal, retryable-error, mid-session,
+  selected-gap, accepted-gap, dismiss/undo, Unranked/re-rank, Unreachable/Dead-End,
+  coverage-diff, editable-canvas inspector, state/transition mutation, dirty replacement,
+  Suggested Event cascade, Test Stub, and matrix states.
+- [x] Verify at 1536×1024 DPR 2 and 1280×800 with section screenshots, overlay screenshots,
+  no shell overflow, keyboard traversal, reduced motion, and zero browser console errors.
+- [x] Asset-density gate: zero raster assets in the prototype; all visual UI is DOM or SVG, so
+  no intrinsic-versus-rendered density deficit exists.
+- [x] Map every Task 6–12 UI requirement and dynamic-canvas behavior in
+  `design-samples/interaction-contract.md`; expanded Playwright contract passes.
+- [ ] User opens the served prototype in Chrome and explicitly approves the visual contract.
+- [ ] Only after approval, Task 6 converts this exact structure and token set into production
+  React components. Visual changes are corrected in the HTML contract first, then reconverted.
 
 ---
 
@@ -266,7 +303,7 @@ test("holeEvidence: sorted dedup union", () => {
 - [ ] Step 2: FAIL → implement → PASS.
 - [ ] Step 3: Real-call check: `node scripts/smoke-extract.mjs` posts Sample 1 via local `npx vercel dev`; confirm machine ≈ hand-derived table, evidence in range, print elapsed. Commit `feat: llm endpoint with extract op`.
 
-### Task 6: Store + minimal wired UI (Day-1 finish line)
+### Task 6: Store + approved-prototype conversion and wiring (Day-1 finish line)
 
 **Files:** Create `src/store.ts`, `src/llmClient.ts`, minimal `SpecPane.tsx`, `Canvas.tsx`, `GapPanel.tsx`; wire `App.tsx`.
 **Interfaces:** Store: `{draftSpec, activeSpec, sentences, machine, gaps (derived), suggestedEvents, displayHoles, rankTruncated, viabilityRefusal, phase, error, sessionSeq, rankSeq, machineRev, dirty}`; actions `setDraftSpec, extract(), applyExtraction(payload, seq)`.
@@ -274,7 +311,15 @@ test("holeEvidence: sorted dedup union", () => {
 
 - [ ] Step 1: failing store tests with deferred fake client: (a) applyExtraction(oc) → 10 holes; (b) A then B started, B resolves, A resolves late → B authoritative; (c) A rejects AFTER B succeeded → B state untouched, no error shown; (d) failure clears `phase` via finally and sets `error`; (e) not_spec → refusal set, machine null; (f) new extraction resets all six session fields (seed them first); (g) 4,001-char spec → no client call, inline reason.
 - [ ] Step 2: FAIL → implement → PASS.
-- [ ] Step 3: Minimal components: SpecPane (textarea, live `N / 4000` counter, submit disabled when invalid, sample buttons), Canvas (dagre render), GapPanel (unranked cards with `holeEvidence` sentence numbers; click persists evidence highlighting until another selection). Loading copy: `Extracting your state machine. This takes a few seconds.` Errors from `ApiError.message` + retry button when `retryable`.
+- [ ] Step 3: Convert the explicitly approved `design-samples/state-gap-mapper.html` structure,
+  tokens, and interaction contract into `SpecPane`, `Canvas`, `GapPanel`, and `StubsPanel`.
+  First prove the React shell against the same fixture state, then replace fixture reads with the
+  store selectors/actions from Steps 1-2. SpecPane retains textarea, live `N / 4000` counter,
+  invalid-submit refusal, and sample buttons; Canvas uses dagre/React Flow without drifting from
+  the approved SVG composition; GapPanel shows unranked cards with `holeEvidence` sentence
+  numbers and click-persistent evidence highlighting. Loading copy: `Extracting your state
+  machine. This takes a few seconds.` Errors come from `ApiError.message` with a retry button
+  when `retryable`. Do not introduce a generic interim layout.
 - [ ] Step 4: Behavioral verify (`npx vercel dev`): Sample 1 → 5-state graph, flagship card, S2+S5 highlight on click; cookie recipe → refusal, no graph; screenshots. **Day 1 gate: the 30-second demo path exists.** Commit `feat: end-to-end paste to gaps`.
 
 ---
@@ -372,7 +417,7 @@ Script runs BOTH ops per sample via local `npx vercel dev`, writes full payloads
 ### Task 12: Design polish + scoped accessibility
 
 **Files:** `styles.css`, all components.
-- Visual: subtle gap pulse, disabled entirely under `@media (prefers-reduced-motion: reduce)` (verified by DevTools emulation screenshot); Suggested amber/dashed + text label vs Structural red/solid + text label; empty state fronting samples; header: `Paste how a feature should behave. See the state machine. Find what the spec forgot.`
+- Visual regression against the approved Task-0 prototype: subtle gap pulse, disabled entirely under `@media (prefers-reduced-motion: reduce)` (verified by DevTools emulation screenshot); Suggested amber/dashed + text label vs Structural red/solid + text label; empty state fronting samples; header: `Paste how a feature should behave. See the state machine. Find what the spec forgot.` Task 12 is a final fidelity pass, not the first substantive design pass.
 - Accessibility scope: all non-canvas controls are real buttons/inputs, keyboard reachable, visible focus; evidence highlight click-persistent; copy feedback both outcomes; status via label + color. OUT (documented deviation): keyboard graph drawing on canvas; the inspector panel is the fallback.
 - Desktop 1280px+ only.
 - [ ] Steps: implement → behavioral verify: 1280/1536 screenshots, keyboard-only pass over gap panel and accept picker, reduced-motion screenshot → commit `style: demo polish and scoped accessibility`.
