@@ -1,0 +1,6 @@
+A document begins as a Draft.
+The author can submit a Draft for review, moving it to In Review.
+A reviewer can approve the document, moving it from In Review to Approved.
+A reviewer can request changes, sending the document from In Review back to Draft.
+An Approved document can be published, moving it to Published.
+The author can archive a Draft, moving it to Archived.

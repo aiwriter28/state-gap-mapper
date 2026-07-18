@@ -1,0 +1,6 @@
+A new order starts in the Cart state.
+When the customer checks out, the order moves from Cart to Processing while payment is attempted.
+If payment succeeds, the order moves from Processing to Paid.
+If payment fails, the order returns from Processing to Cart so the customer can try again.
+The customer can cancel the order from the Cart, which moves it to Cancelled.
+Once a Paid order is handed to the courier, it moves to Shipped.
