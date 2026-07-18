@@ -34,6 +34,7 @@ pnpm-debug.log*
 .ruff_cache/
 .eslintcache
 graphify-out/
+.worktrees/
 
 # OS / editor
 .DS_Store
