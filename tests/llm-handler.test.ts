@@ -297,13 +297,14 @@ describe("semantic repair loop", () => {
     expect(transport.create).toHaveBeenCalledTimes(1);
   });
 
-  test("sends model gpt-5.6, strict schema format, and a 20s first slot", async () => {
+  test("sends GPT-5.6 Sol at medium, strict schema format, and a 20s first slot", async () => {
     const transport = queuedTransport(output(validExtraction()));
     await createLlmHandler({ transport })(request());
 
     expect(transport.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "gpt-5.6",
+        model: "gpt-5.6-sol",
+        reasoning: { effort: "medium" },
         store: false,
         text: {
           format: {

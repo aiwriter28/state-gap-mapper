@@ -13,7 +13,7 @@
 
 **Architecture:** Client-heavy Vite + React SPA. ONE Vercel serverless function (`api/llm.ts`, op-discriminated) proxies both GPT-5.6 structured-output calls, so the rate limiter genuinely spans both operations within a warm instance. Call 1 returns viability + machine only (fastest first canvas); call 2 returns relevance ranking, accept targets, and Suggested Events, all non-blocking (see DESIGN_DECISIONS second amendment). Everything else (sentence splitting, runtime decoding, validation, gap analysis, rank merge, evidence composition, test stubs, coverage diff) is deterministic TypeScript. All untrusted input (model output, HTTP bodies, cached JSON) passes runtime decoders from `unknown` before semantic validation. Canvas edits route through validated domain commands and re-run gap analysis instantly with no LLM call.
 
-**Tech Stack:** TypeScript (strict), Vite, React (version installed by current create-vite; @xyflow/react v12 supports it), dagre, zustand, Vitest, ESLint, OpenAI SDK (server-side only, model `gpt-5.6`, structured outputs strict mode, `maxRetries: 0`), Vercel (static + one `api/` Node function, `maxDuration: 60`), `vercel` CLI as a pinned devDependency, `engines.node: ">=20.19"`.
+**Tech Stack:** TypeScript (strict), Vite, React (version installed by current create-vite; @xyflow/react v12 supports it), dagre, zustand, Vitest, ESLint, OpenAI SDK (server-side only, model `gpt-5.6-sol`, reasoning effort `medium`, structured outputs strict mode, `maxRetries: 0`), Vercel (static + one `api/` Node function, `maxDuration: 60`), `vercel` CLI as a pinned devDependency, `engines.node: ">=20.19"`.
 
 ## Global Constraints
 

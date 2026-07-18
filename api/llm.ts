@@ -55,7 +55,8 @@ const ERROR_MESSAGES = {
 } as const;
 
 export interface ModelAttemptRequest {
-  model: "gpt-5.6";
+  model: "gpt-5.6-sol";
+  reasoning: { effort: "medium" };
   store: false;
   input: Array<{
     role: "developer" | "user";
@@ -252,7 +253,8 @@ function buildModelRequest(
   });
 
   return {
-    model: "gpt-5.6",
+    model: "gpt-5.6-sol",
+    reasoning: { effort: "medium" },
     store: false,
     input,
     text: {
@@ -297,7 +299,8 @@ function buildRankModelRequest(
   });
 
   return {
-    model: "gpt-5.6",
+    model: "gpt-5.6-sol",
+    reasoning: { effort: "medium" },
     store: false,
     input,
     text: {
