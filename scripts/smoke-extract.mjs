@@ -1,3 +1,4 @@
+// fallow-ignore-file unused-file
 import { readFile } from "node:fs/promises";
 
 const endpoint = process.env.STATE_GAP_MAPPER_ENDPOINT ??
