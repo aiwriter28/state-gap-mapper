@@ -266,34 +266,37 @@ function semanticIssues(output: ExtractionOutput, sentenceCount: number): VErr[]
   return issues;
 }
 
-function decodeModelOutput(outputText: string, sentenceCount: number):
-  | { ok: true; output: ExtractionOutput }
-  | { ok: false; issues: string[] } {
+type ModelOutputValidation =
+  | { kind: "valid"; output: ExtractionOutput }
+  | { kind: "structural_failure" }
+  | { kind: "semantic_failure"; issues: string[] };
+
+function validateModelOutput(
+  outputText: string,
+  sentenceCount: number,
+): ModelOutputValidation {
   let parsed: unknown;
   try {
     parsed = JSON.parse(outputText) as unknown;
   } catch {
-    return { ok: false, issues: ["model_json at $: Return one valid JSON object."] };
+    return { kind: "structural_failure" };
   }
 
   const decoded = decodeExtractionOutput(parsed);
   if (isDecodeError(decoded)) {
-    return {
-      ok: false,
-      issues: [`model_shape at ${decoded.path}: ${decoded.message}`],
-    };
+    return { kind: "structural_failure" };
   }
 
   const issues = semanticIssues(decoded, sentenceCount);
   if (issues.length > 0) {
     return {
-      ok: false,
+      kind: "semantic_failure",
       issues: issues
         .slice(0, 20)
         .map((issue) => `${issue.code} at ${issue.subject}: ${issue.message}`),
     };
   }
-  return { ok: true, output: decoded };
+  return { kind: "valid", output: decoded };
 }
 
 function responseHasRefusal(response: unknown): boolean {
@@ -369,19 +372,22 @@ async function extract(
       return errorResult(422, "model_refusal", ERROR_MESSAGES.modelRefusal);
     }
 
-    const decoded = decodeModelOutput(modelResponse.outputText, sentences.length);
-    if (!decoded.ok) {
+    const validation = validateModelOutput(modelResponse.outputText, sentences.length);
+    if (validation.kind === "structural_failure") {
+      return errorResult(502, "model_invalid", ERROR_MESSAGES.modelInvalid);
+    }
+    if (validation.kind === "semantic_failure") {
       semanticFailureCount += 1;
-      repairIssues = decoded.issues;
+      repairIssues = validation.issues;
       continue;
     }
 
-    if (decoded.output.viability.isSpec) {
+    if (validation.output.viability.isSpec) {
       return {
         status: 200,
         body: {
           kind: "machine",
-          machine: decoded.output.machine,
+          machine: validation.output.machine,
           sentences,
         },
       };
@@ -390,7 +396,7 @@ async function extract(
       status: 200,
       body: {
         kind: "not_spec",
-        reason: decoded.output.viability.reason,
+        reason: validation.output.viability.reason,
         sentences,
       },
     };

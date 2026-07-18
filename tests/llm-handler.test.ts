@@ -230,15 +230,32 @@ describe("semantic repair loop", () => {
     expect(transport.create).toHaveBeenCalledTimes(2);
   });
 
-  test("treats invalid JSON model text as semantic and repairs it", async () => {
-    const transport = queuedTransport(
-      { kind: "output", outputText: "not json" },
-      output(validExtraction()),
-    );
+  test.each([
+    {
+      name: "malformed JSON",
+      modelResult: { kind: "output" as const, outputText: "not json" },
+    },
+    {
+      name: "strict decoder failure",
+      modelResult: output({
+        viability: { isSpec: true, reason: "A behavioral workflow spec." },
+        machine: {
+          ...validMachine(),
+          states: [{ ...validMachine().states[0], id: true }],
+        },
+      }),
+    },
+  ])("returns terminal model_invalid for $name", async ({ modelResult }) => {
+    const transport = queuedTransport(modelResult, output(validExtraction()));
     const response = await createLlmHandler({ transport })(request());
 
-    expect(response.status).toBe(200);
-    expect(transport.create).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(502);
+    expect(await json(response)).toEqual({
+      code: "model_invalid",
+      message: "The model could not produce a valid extraction.",
+      retryable: true,
+    });
+    expect(transport.create).toHaveBeenCalledTimes(1);
   });
 
   test("sends model gpt-5.6, strict schema format, and a 20s first slot", async () => {
