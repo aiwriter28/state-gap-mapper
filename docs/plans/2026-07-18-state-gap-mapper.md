@@ -431,9 +431,9 @@ Script runs BOTH ops per sample via local `npx vercel dev`, writes full payloads
 - [x] Run `npx vercel build` locally; configure `OPENAI_API_KEY` for Vercel Production, Preview,
   and Development; validate `gpt-5.6-sol` at reasoning effort `medium` with a live strict
   structured-output request.
-- [ ] Integrate the implementation branch and deploy production.
-- [ ] Live verify on production (`?bust=1`): three samples instant + offline-capable; one novel spec through the live path (record elapsed); viability refusal on garbage. Rate limiting verified by handler tests; best-effort in production (documented); no live 429 gate. Screenshots; evidence quoted in session log.
-- [ ] Commit `chore: production config`, push public GitHub repo.
+- [x] Integrate the implementation branch and deploy production.
+- [x] Live verify on production (`?bust=1`): three samples instant + offline-capable; one novel spec through the live path (record elapsed); viability refusal on garbage. Rate limiting verified by handler tests; best-effort in production (documented); no live 429 gate. Screenshots; evidence quoted in session log.
+- [x] Commit `chore: production config`, push public GitHub repo.
 
 ### Task 14: Submission package
 

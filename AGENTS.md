@@ -23,12 +23,11 @@ same branch before handing off.
 
 ## Current snapshot
 
-Last updated on 2026-07-18: Tasks 1 through 12 are complete and review-clean on
-`feature/state-gap-mapper-build`; Task 13 is in progress. Its Vercel preflight, environment setup,
-and OpenAI model validation are complete. The remaining work is to integrate the implementation,
-deploy production, perform the production smoke/visual checks, and push the public repository.
-Always confirm this against the implementation worktree's `.superpowers/sdd/progress.md` because
-the snapshot can become stale.
+Last updated on 2026-07-18: Tasks 1 through 13 are complete. The implementation is integrated into
+`main`, deployed at `https://state-gap-mapper-build.vercel.app`, live-verified, and published to the
+public GitHub repository. Task 14, the README, demo video, Devpost package, and final submission,
+is next. Always confirm this against `.superpowers/sdd/progress.md` because the snapshot can become
+stale.
 ## Claude compatibility
 
 `CLAUDE.md` is a symlink to this file. Edit `AGENTS.md` only; the symlink keeps Claude and Codex on
