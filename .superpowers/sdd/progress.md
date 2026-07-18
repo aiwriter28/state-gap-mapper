@@ -9,3 +9,4 @@ Task 8: complete (commits d35628e..ed9d5e0, review clean after replacement/inter
 Task 9: complete (commits ed9d5e0..82a1007, review clean after acceptance feedback/keyboard/invariant fixes)
 Task 10: complete (commit 816d2dd, review clean after selector-precedence test hardening; live 1280px modal/coverage verification clean)
 Task 11: complete (commit 6ed9120, review clean after safe-generation fixes; offline Chrome verification clean)
+Task 12: complete (commit 311e026, design review clean after fidelity/accessibility fixes; 1280/1536, keyboard, reduced-motion, and Lighthouse verification clean)

@@ -17,8 +17,8 @@ Before continuing implementation:
    gate, commit the task, and update `.superpowers/sdd/progress.md` before handoff.
 
 The plan checklist can lag the implementation. Resume from the progress file, not from unchecked
-boxes in the plan. Last updated on 2026-07-18: Tasks 1 through 11 are complete and review-clean;
-Task 12 is next. Confirm the progress file because this snapshot can become stale.
+boxes in the plan. Last updated on 2026-07-18: Tasks 1 through 12 are complete and review-clean;
+Task 13 is next. Confirm the progress file because this snapshot can become stale.
 
 ## Agent skills
 
