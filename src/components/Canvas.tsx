@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -136,6 +136,8 @@ export function Canvas() {
   const [transitionTo, setTransitionTo] = useState("");
   const [transitionEvent, setTransitionEvent] = useState("");
   const [newEventName, setNewEventName] = useState("");
+  const [focusStateName, setFocusStateName] = useState(false);
+  const stateNameInputRef = useRef<HTMLInputElement>(null);
 
   const ghostHole = flagshipHole(machine, gaps.missingTransitions);
   const elements = useMemo(
@@ -166,7 +168,17 @@ export function Canvas() {
     }
   }, [eventId, machine, selectedStateId, transitionFrom, transitionTo]);
 
-  const openInspector = (stateId: string | null = selectedStateId) => {
+  useEffect(() => {
+    if (!inspectorOpen || !focusStateName) return;
+    stateNameInputRef.current?.focus();
+    stateNameInputRef.current?.select();
+    setFocusStateName(false);
+  }, [focusStateName, inspectorOpen]);
+
+  const openInspector = (
+    stateId: string | null = selectedStateId,
+    focusRename = false,
+  ) => {
     if (machine === null) return;
     const state = machine.states.find((candidate) => candidate.id === stateId) ?? machine.states[0];
     if (state === undefined) return;
@@ -174,6 +186,7 @@ export function Canvas() {
     setStateName(state.name);
     setTransitionFrom(state.id);
     setTransitionTo(firstOtherState(machine, state.id));
+    setFocusStateName(focusRename);
     setInspectorOpen(true);
   };
 
@@ -224,7 +237,7 @@ export function Canvas() {
             elementsSelectable
             deleteKeyCode={["Backspace", "Delete"]}
             onConnect={onConnect}
-            onNodeDoubleClick={(_, node) => openInspector(node.id)}
+            onNodeDoubleClick={(_, node) => openInspector(node.id, true)}
             onEdgesDelete={(edges) => {
               for (const edge of edges) {
                 if (edge.type !== "machine") continue;
@@ -275,7 +288,7 @@ export function Canvas() {
             </label>
             <label className="field-label">
               State name
-              <input className="field-input" value={stateName} onChange={(event) => setStateName(event.target.value)} />
+              <input ref={stateNameInputRef} className="field-input" value={stateName} onChange={(event) => setStateName(event.target.value)} />
             </label>
             <div className="inspector-actions">
               <button className="soft-button" type="button" onClick={() => {

@@ -370,7 +370,12 @@ function stateCreator(client: LlmClient) {
       const intent = get().replacementIntent;
       if (intent === null) return;
       if (intent.kind === "sample") {
-        selectSampleNow(intent.spec);
+        set({
+          draftSpec: intent.spec,
+          replacementConfirmation: null,
+          replacementIntent: null,
+        });
+        await runExtraction(intent.spec);
         return;
       }
       set({ replacementConfirmation: null, replacementIntent: null });

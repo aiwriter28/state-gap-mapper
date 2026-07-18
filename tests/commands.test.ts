@@ -22,13 +22,15 @@ function resultMachine(result: ReturnType<typeof addState>): Machine {
   return result.machine;
 }
 
-function expectError(
-  result: ReturnType<typeof addState>,
-  code: string,
+function expectAtomicError(
   original: Machine,
+  code: string,
+  command: (machine: Machine) => ReturnType<typeof addState>,
 ): void {
+  const before = structuredClone(original);
+  const result = command(original);
   expect(result).toMatchObject({ ok: false, error: { code } });
-  expect(original).toEqual(original);
+  expect(original).toEqual(before);
 }
 
 describe("validated machine commands", () => {
@@ -47,11 +49,8 @@ describe("validated machine commands", () => {
     const colliding = resultMachine(addState(first, { name: "Awaiting review" }));
     expect(colliding.states.at(-1)?.id).toBe("awaiting_review_2");
 
-    const before = structuredClone(colliding);
-    expectError(addState(colliding, { name: " ... ! " }), "blank_name", colliding);
-    expect(colliding).toEqual(before);
-    expectError(addState(colliding, { name: "x".repeat(65) }), "too_large", colliding);
-    expect(colliding).toEqual(before);
+    expectAtomicError(colliding, "blank_name", (machine) => addState(machine, { name: " ... ! " }));
+    expectAtomicError(colliding, "too_large", (machine) => addState(machine, { name: "x".repeat(65) }));
   });
 
   test("preserves ids while renaming states and events and reports stale ids", () => {
@@ -60,10 +59,8 @@ describe("validated machine commands", () => {
     expect(resultMachine(renameEvent(renamedState, { id: "cancel", name: "Cancel order" }))
       .events.find((event) => event.id === "cancel")?.name).toBe("Cancel order");
 
-    const before = structuredClone(orderMachine);
-    expectError(renameState(orderMachine, { id: "gone", name: "Gone" }), "unknown_id", orderMachine);
-    expectError(renameEvent(orderMachine, { id: "cancel", name: "  " }), "blank_name", orderMachine);
-    expect(orderMachine).toEqual(before);
+    expectAtomicError(orderMachine, "unknown_id", (machine) => renameState(machine, { id: "gone", name: "Gone" }));
+    expectAtomicError(orderMachine, "blank_name", (machine) => renameEvent(machine, { id: "cancel", name: "  " }));
   });
 
   test("merges event data and rewrites transition event ids without losing evidence", () => {
@@ -103,9 +100,9 @@ describe("validated machine commands", () => {
         { from: "a", event: "right", to: "done", evidence: [1] },
       ],
     };
-    const beforeCollision = structuredClone(collision);
-    expectError(mergeEvents(collision, { sourceId: "left", targetId: "right" }), "nondeterministic", collision);
-    expect(collision).toEqual(beforeCollision);
+    expectAtomicError(collision, "nondeterministic", (machine) => mergeEvents(machine, { sourceId: "left", targetId: "right" }));
+    expectAtomicError(collision, "unknown_id", (machine) => mergeEvents(machine, { sourceId: "missing", targetId: "right" }));
+    expectAtomicError(collision, "unknown_id", (machine) => mergeEvents(machine, { sourceId: "left", targetId: "missing" }));
 
     const forms: Machine = {
       ...collision,
@@ -115,9 +112,7 @@ describe("validated machine commands", () => {
         { id: "right", name: "Right", surfaceForms: Array.from({ length: 5 }, (_, index) => `right ${index}`), evidence: [1] },
       ],
     };
-    const beforeForms = structuredClone(forms);
-    expectError(mergeEvents(forms, { sourceId: "left", targetId: "right" }), "too_large", forms);
-    expect(forms).toEqual(beforeForms);
+    expectAtomicError(forms, "too_large", (machine) => mergeEvents(machine, { sourceId: "left", targetId: "right" }));
   });
 
   test("deletes noninitial state with incident edges, changes initial and final status safely", () => {
@@ -125,13 +120,14 @@ describe("validated machine commands", () => {
     expect(deleted.states.map((state) => state.id)).not.toContain("paid");
     expect(deleted.transitions.some((transition) => transition.from === "paid" || transition.to === "paid")).toBe(false);
 
-    const before = structuredClone(orderMachine);
-    expectError(deleteState(orderMachine, { id: "cart" }), "initial_required", orderMachine);
-    expect(orderMachine).toEqual(before);
+    expectAtomicError(orderMachine, "initial_required", (machine) => deleteState(machine, { id: "cart" }));
+    expectAtomicError(orderMachine, "unknown_id", (machine) => deleteState(machine, { id: "missing" }));
 
     const initial = resultMachine(setInitial(orderMachine, { id: "processing" }));
     expect(initial.states.filter((state) => state.isInitial).map((state) => state.id)).toEqual(["processing"]);
-    expectError(toggleFinal(orderMachine, { id: "processing" }), "final_outgoing", orderMachine);
+    expectAtomicError(orderMachine, "unknown_id", (machine) => setInitial(machine, { id: "missing" }));
+    expectAtomicError(orderMachine, "final_outgoing", (machine) => toggleFinal(machine, { id: "processing" }));
+    expectAtomicError(orderMachine, "unknown_id", (machine) => toggleFinal(machine, { id: "missing" }));
     const final = resultMachine(toggleFinal(orderMachine, { id: "cancelled" }));
     expect(final.states.find((state) => state.id === "cancelled")?.isFinal).toBe(false);
   });
@@ -157,17 +153,21 @@ describe("validated machine commands", () => {
     });
     expect(withEvent.transitions.at(-1)?.event).toBe("payment_timeout");
 
-    const before = structuredClone(filled);
-    expectError(addTransition(filled, {
+    expectAtomicError(filled, "nondeterministic", (machine) => addTransition(machine, {
       from: "processing", to: "cancelled", event: { kind: "existing", id: "cancel" },
-    }), "nondeterministic", filled);
-    expectError(addTransition(filled, {
+    }));
+    expectAtomicError(filled, "final_outgoing", (machine) => addTransition(machine, {
       from: "cancelled", to: "cart", event: { kind: "existing", id: "cancel" },
-    }), "final_outgoing", filled);
-    expectError(addTransition(filled, {
+    }));
+    expectAtomicError(filled, "unknown_id", (machine) => addTransition(machine, {
       from: "missing", to: "cart", event: { kind: "existing", id: "cancel" },
-    }), "unknown_id", filled);
-    expect(filled).toEqual(before);
+    }));
+    expectAtomicError(filled, "unknown_id", (machine) => addTransition(machine, {
+      from: "processing", to: "missing", event: { kind: "existing", id: "cancel" },
+    }));
+    expectAtomicError(filled, "unknown_id", (machine) => addTransition(machine, {
+      from: "processing", to: "cart", event: { kind: "existing", id: "missing" },
+    }));
 
     const deleted = resultMachine(deleteTransition(filled, { from: "processing", eventId: "cancel" }));
     expect(deleted.transitions.some((transition) => transition.from === "processing" && transition.event === "cancel")).toBe(false);
@@ -185,11 +185,16 @@ describe("validated machine commands", () => {
       events: [],
       transitions: [],
     };
-    const before = structuredClone(thirty);
-    expectError(addState(thirty, { name: "Thirty first" }), "too_large", thirty);
-    expect(thirty).toEqual(before);
-    expectError(deleteTransition(thirty, { from: "s0", eventId: "missing" }), "unknown_id", thirty);
-    expect(thirty).toEqual(before);
+    expectAtomicError(thirty, "too_large", (machine) => addState(machine, { name: "Thirty first" }));
+    expectAtomicError(thirty, "unknown_id", (machine) => deleteTransition(machine, { from: "s0", eventId: "missing" }));
+
+    const fullLengthId = "a".repeat(64);
+    const suffixOverflow: Machine = {
+      states: [{ id: fullLengthId, name: fullLengthId, isInitial: true, isFinal: false, evidence: [1] }],
+      events: [],
+      transitions: [],
+    };
+    expectAtomicError(suffixOverflow, "too_large", (machine) => addState(machine, { name: fullLengthId }));
   });
 
   test("rejects 31st event, 201st transition, and over-cap evidence without changing a candidate", () => {
@@ -200,11 +205,9 @@ describe("validated machine commands", () => {
       id: `e${index}`, name: `Event ${index}`, surfaceForms: [`event ${index}`], evidence: [1],
     }));
     const maxedEvents: Machine = { states: states.slice(0, 2), events, transitions: [] };
-    const eventsBefore = structuredClone(maxedEvents);
-    expectError(addTransition(maxedEvents, {
+    expectAtomicError(maxedEvents, "too_large", (machine) => addTransition(machine, {
       from: "s0", to: "s1", event: { kind: "new", name: "New event" },
-    }), "too_large", maxedEvents);
-    expect(maxedEvents).toEqual(eventsBefore);
+    }));
 
     const maxedTransitions: Machine = {
       states,
@@ -216,18 +219,14 @@ describe("validated machine commands", () => {
         evidence: [1],
       })),
     };
-    const transitionsBefore = structuredClone(maxedTransitions);
-    expectError(addTransition(maxedTransitions, {
+    expectAtomicError(maxedTransitions, "too_large", (machine) => addTransition(machine, {
       from: "s6", to: "s0", event: { kind: "existing", id: "e20" },
-    }), "too_large", maxedTransitions);
-    expect(maxedTransitions).toEqual(transitionsBefore);
+    }));
 
     const evidenceOverCap: Machine = {
       ...orderMachine,
       states: [{ ...orderMachine.states[0], evidence: Array.from({ length: 21 }, (_, index) => index + 1) }, ...orderMachine.states.slice(1)],
     };
-    const evidenceBefore = structuredClone(evidenceOverCap);
-    expectError(addState(evidenceOverCap, { name: "Still blocked" }), "too_large", evidenceOverCap);
-    expect(evidenceOverCap).toEqual(evidenceBefore);
+    expectAtomicError(evidenceOverCap, "too_large", (machine) => addState(machine, { name: "Still blocked" }));
   });
 });
