@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -23,6 +23,7 @@ afterEach(() => cleanup());
 test("Accept opens a keyboard-operable target picker and Dismiss is a real button", async () => {
   const user = userEvent.setup();
   render(<GapPanel />);
+  await user.click(screen.getByRole("button", { name: /Structural Gap processing x cancel/i }));
   const accept = screen.getAllByRole("button", { name: "Accept" }).find((button) =>
     button.closest("article")?.textContent?.includes("processing x cancel"),
   );
@@ -45,6 +46,7 @@ test("Accept opens a keyboard-operable target picker and Dismiss is a real butto
   await user.keyboard("{Enter}");
   expect(screen.queryByRole("dialog", { name: "Accept Missing Transition" })).toBeNull();
   expect(appStore.getState().stubs).toHaveLength(1);
+  await waitFor(() => expect(document.activeElement?.classList.contains("gap-select")).toBe(true));
 
   const nextDismiss = screen.getAllByRole("button", { name: "Dismiss" })[0];
   await user.click(nextDismiss);
@@ -86,6 +88,7 @@ test("Escape closes the accept picker and Copy reports success or its selectable
 test("failed stale acceptance stays open and exposes its command error in the picker", async () => {
   const user = userEvent.setup();
   render(<GapPanel />);
+  await user.click(screen.getByRole("button", { name: /Structural Gap processing x cancel/i }));
   const accept = screen.getAllByRole("button", { name: "Accept" }).find((button) =>
     button.closest("article")?.textContent?.includes("processing x cancel"),
   );
@@ -112,6 +115,7 @@ test("failed stale acceptance stays open and exposes its command error in the pi
 test("focused Cancel activated with Enter closes without accepting a selected target", async () => {
   const user = userEvent.setup();
   render(<GapPanel />);
+  await user.click(screen.getByRole("button", { name: /Structural Gap processing x cancel/i }));
   const accept = screen.getAllByRole("button", { name: "Accept" }).find((button) =>
     button.closest("article")?.textContent?.includes("processing x cancel"),
   );
@@ -131,6 +135,7 @@ test("focused Cancel activated with Enter closes without accepting a selected ta
 test("new-target acceptance creates the state and transition and renders the exact stub", async () => {
   const user = userEvent.setup();
   render(<><GapPanel /><StubsPanel /></>);
+  await user.click(screen.getByRole("button", { name: /Structural Gap processing x cancel/i }));
   const accept = screen.getAllByRole("button", { name: "Accept" }).find((button) =>
     button.closest("article")?.textContent?.includes("processing x cancel"),
   );
@@ -195,6 +200,7 @@ test("Suggested Event acceptance failures are visible and a fresh picker clears 
   expect(appStore.getState().machine).toBe(capacityMachine);
   expect(appStore.getState().suggestedEvents).toHaveLength(1);
 
+  await user.click(screen.getByRole("button", { name: /Structural Gap processing x cancel/i }));
   const holeAccept = screen.getAllByRole("button", { name: "Accept" }).find((button) =>
     button.closest("article")?.textContent?.includes("processing x cancel"),
   );

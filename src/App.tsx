@@ -9,7 +9,14 @@ export function App() {
       <header className="app-header">
         <h1 className="wordmark">State Gap Mapper</h1>
         <p className="positioning">Paste how a feature should behave. See the state machine. Find what the spec forgot.</p>
-        <button className="quiet-button docs-button" type="button">Docs</button>
+        <a
+          className="quiet-button docs-button"
+          href="https://github.com/aiwriter28/state-gap-mapper#readme"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Docs
+        </a>
       </header>
       <section className="workspace">
         <SpecPane />

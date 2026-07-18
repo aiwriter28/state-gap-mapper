@@ -34,10 +34,13 @@ body,
 }
 
 body { min-width: 1200px; }
-button, textarea { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { color: inherit; }
 
+a:focus-visible,
 button:focus-visible,
+input:focus-visible,
+select:focus-visible,
 textarea:focus-visible,
 [tabindex="0"]:focus-visible {
   outline: 2px solid var(--soft-blue);
@@ -95,7 +98,7 @@ textarea:focus-visible,
 
 .quiet-button:hover:not(:disabled) { color: var(--soft-blue); }
 .quiet-button:disabled { cursor: default; opacity: 0.74; }
-.docs-button { margin-left: auto; font-size: 0.9375rem; }
+.docs-button { margin-left: auto; font-size: 0.9375rem; text-decoration: none; }
 
 .workspace {
   display: grid;
@@ -203,15 +206,15 @@ textarea:focus-visible,
 .inspector-close { min-height: 28px; padding: 3px 7px; }
 .field-label { display: grid; gap: 5px; margin-bottom: 10px; color: var(--faded); font-size: 0.72rem; }
 .field-input, .field-select { width: 100%; min-height: 36px; border: 1px solid var(--panel-strong); border-radius: 7px; padding: 0 9px; background: var(--blueprint); color: var(--chalk); font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; }
-.field-input:focus, .field-select:focus { border-color: var(--soft-blue); outline: none; }
+.field-input:focus, .field-select:focus { border-color: var(--soft-blue); }
 .inspector-actions { flex-wrap: wrap; }
 .inspector-actions .soft-button, .canvas-inspector > .soft-button { min-height: 32px; padding-inline: 10px; font-size: 0.72rem; }
 .transition-row { justify-content: space-between; border-top: 1px solid var(--panel-strong); padding: 8px 0; color: var(--chalk); font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; }
 .transition-row span { min-width: 0; overflow-wrap: anywhere; }
 .inspector-feedback { min-height: 32px; margin: 10px 0 0; color: var(--faded); font-size: 0.72rem; line-height: 1.4; }
-.inspector-feedback.error { color: var(--redline); }
-.danger-button { border-color: rgba(232, 71, 79, 0.65) !important; color: #ff9ca0 !important; }
-.node-user-badge, .edge-user-badge, .inspector-user-badge { display: inline-block; border: 1px solid var(--amber); border-radius: 99px; padding: 2px 5px; color: var(--amber); font-size: 0.54rem; font-weight: 600; letter-spacing: 0.03em; white-space: nowrap; }
+.inspector-feedback.error { color: var(--chalk); }
+.danger-button { border-color: var(--faded) !important; color: var(--chalk) !important; }
+.node-user-badge, .edge-user-badge, .inspector-user-badge { display: inline-block; border: 1px solid var(--faded); border-radius: 99px; padding: 2px 5px; color: var(--faded); font-size: 0.54rem; font-weight: 600; letter-spacing: 0.03em; white-space: nowrap; }
 .node-user-badge { position: absolute; right: 7px; bottom: 6px; }
 .edge-user-badge { margin-left: 6px; vertical-align: middle; }
 .inspector-user-badge { margin: 8px 0 0; }
@@ -226,7 +229,7 @@ textarea:focus-visible,
 
 .gap-scroll { flex: 1; padding: 10px 2px 18px; }
 .gap-section-heading { margin: 1px 2px 8px; color: var(--faded); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-.gap-card { position: relative; margin-bottom: 10px; border: 1px solid var(--faded); border-radius: var(--radius); background: rgba(22, 48, 79, 0.52); overflow: hidden; cursor: pointer; }
+.gap-card { position: relative; margin-bottom: 10px; border: 1px solid var(--faded); border-radius: var(--radius); background: rgba(22, 48, 79, 0.52); overflow: hidden; }
 .gap-card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--redline); content: ""; }
 .gap-card.active { border-color: var(--chalk); }
 .gap-card.expanded { padding: 14px 14px 12px 18px; }
@@ -236,16 +239,22 @@ textarea:focus-visible,
 .pair { margin: 0; font-size: 1rem; line-height: 1.35; }
 .rationale { margin: 12px 0; font-size: 0.875rem; line-height: 1.45; }
 .rank-metric { margin: 8px 0 0; color: var(--soft-blue); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.relevance-metric { display: grid; grid-template-columns: auto minmax(72px, 104px) auto; align-items: center; justify-content: start; gap: 9px; color: var(--faded); }
+.relevance-track { display: block; width: 104px; height: 7px; border: 1px solid var(--faded); background: transparent; }
+.relevance-fill { display: block; max-width: 100%; height: 100%; background: var(--redline); }
+.relevance-value { color: var(--chalk); font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; letter-spacing: 0; }
 .card-footer { display: flex; align-items: center; gap: 8px; }
 .evidence-chip { display: inline-grid; min-width: 38px; min-height: 30px; place-items: center; border: 1px solid var(--faded); border-radius: 6px; color: var(--chalk); font-size: 0.75rem; }
 .card-actions { display: flex; gap: 8px; margin-left: auto; color: var(--faded); }
 .card-actions .quiet-button { min-height: 30px; padding: 4px 6px; font-size: 0.75rem; }
-.gap-card.compact { display: flex; min-height: 51px; align-items: center; justify-content: space-between; padding: 0 14px 0 18px; }
+.gap-card.compact { min-height: 51px; }
+.compact-select { display: flex; min-height: 49px; align-items: center; justify-content: space-between; padding: 0 14px 0 18px; }
 .chevron { display: block; flex: 0 0 auto; width: 9px; height: 9px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); }
 .section-rule { height: 1px; margin: 14px 0 13px; background: var(--panel-strong); }
 .structural-card { margin-bottom: 8px; border: 1px solid var(--faded); border-radius: 8px; padding: 10px 12px; background: rgba(22, 48, 79, 0.36); }
 .structural-label { display: block; margin-bottom: 5px; color: var(--faded); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
-.suggested-card { margin-bottom: 10px; border: 1px dashed var(--amber); border-radius: var(--radius); padding: 13px 14px; background: rgba(239, 169, 59, 0.08); }
+.suggested-section-heading { color: var(--amber); }
+.suggested-card { margin-bottom: 10px; border: 1.5px dashed var(--amber); border-radius: var(--radius); padding: 13px 14px; background: rgba(239, 169, 59, 0.08); }
 .suggested-label { display: block; margin-bottom: 8px; color: var(--amber); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
 .suggested-card .rank-metric { color: var(--amber); }
 .suggested-actions { justify-content: flex-end; margin-top: 10px; }

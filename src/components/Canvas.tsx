@@ -275,6 +275,7 @@ export function Canvas() {
               State
               <select
                 className="field-select"
+                name="machine-state"
                 value={selectedState?.id ?? ""}
                 onChange={(event) => {
                   const state = machine.states.find((candidate) => candidate.id === event.target.value);
@@ -288,7 +289,7 @@ export function Canvas() {
             </label>
             <label className="field-label">
               State name
-              <input ref={stateNameInputRef} className="field-input" value={stateName} onChange={(event) => setStateName(event.target.value)} />
+              <input ref={stateNameInputRef} className="field-input" name="machine-state-name" value={stateName} onChange={(event) => setStateName(event.target.value)} />
             </label>
             <div className="inspector-actions">
               <button className="soft-button" type="button" onClick={() => {
@@ -318,7 +319,7 @@ export function Canvas() {
             <h4 className="inspector-section-title">Add state</h4>
             <label className="field-label">
               New state name
-              <input className="field-input" value={newStateName} onChange={(event) => setNewStateName(event.target.value)} />
+              <input className="field-input" name="new-state-name" value={newStateName} onChange={(event) => setNewStateName(event.target.value)} />
             </label>
             <button className="soft-button" type="button" onClick={() => {
               const result = applyCommand(addState, { name: newStateName });
@@ -332,7 +333,7 @@ export function Canvas() {
             <h4 className="inspector-section-title">Event</h4>
             <label className="field-label">
               Event
-              <select className="field-select" value={selectedEvent?.id ?? ""} onChange={(event) => {
+              <select className="field-select" name="machine-event" value={selectedEvent?.id ?? ""} onChange={(event) => {
                 const selected = machine.events.find((candidate) => candidate.id === event.target.value);
                 setEventId(event.target.value);
                 setEventName(selected?.name ?? "");
@@ -342,7 +343,7 @@ export function Canvas() {
             </label>
             <label className="field-label">
               Event name
-              <input className="field-input" value={eventName} onChange={(event) => setEventName(event.target.value)} />
+              <input className="field-input" name="machine-event-name" value={eventName} onChange={(event) => setEventName(event.target.value)} />
             </label>
             <button className="soft-button" type="button" onClick={() => {
               if (selectedEvent === null) return;
@@ -352,23 +353,23 @@ export function Canvas() {
 
             <h4 className="inspector-section-title">Add transition</h4>
             <label className="field-label">From
-              <select className="field-select" value={transitionFrom} onChange={(event) => setTransitionFrom(event.target.value)}>
+              <select className="field-select" name="transition-from" value={transitionFrom} onChange={(event) => setTransitionFrom(event.target.value)}>
                 {machine.states.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
               </select>
             </label>
             <label className="field-label">To
-              <select className="field-select" value={transitionTo} onChange={(event) => setTransitionTo(event.target.value)}>
+              <select className="field-select" name="transition-to" value={transitionTo} onChange={(event) => setTransitionTo(event.target.value)}>
                 {machine.states.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
               </select>
             </label>
             <label className="field-label">Event
-              <select className="field-select" value={transitionEvent} onChange={(event) => setTransitionEvent(event.target.value)}>
+              <select className="field-select" name="transition-event" value={transitionEvent} onChange={(event) => setTransitionEvent(event.target.value)}>
                 {machine.events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
                 <option value="new">Create a new event</option>
               </select>
             </label>
             {transitionEvent === "new" ? <label className="field-label">New event name
-              <input className="field-input" value={newEventName} onChange={(event) => setNewEventName(event.target.value)} />
+              <input className="field-input" name="new-event-name" value={newEventName} onChange={(event) => setNewEventName(event.target.value)} />
             </label> : null}
             <button className="soft-button" type="button" onClick={() => {
               const event = transitionEvent === "new"

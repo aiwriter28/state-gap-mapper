@@ -25,6 +25,10 @@ function relevanceLabel(relevance: number): string {
   return `${Math.round(relevance * 100)}%`;
 }
 
+function relevanceDecimal(relevance: number): string {
+  return relevance.toFixed(2);
+}
+
 function stateEvidence(machine: Machine, stateId: string): number[] {
   return machine.states.find((state) => state.id === stateId)?.evidence ?? [];
 }
@@ -49,8 +53,14 @@ function AcceptPicker({
   const canConfirm = targetKind === "existing" ? existingStateId.length > 0 : newStateName.trim().length > 0;
 
   useEffect(() => {
+    const returnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     const first = dialogRef.current?.querySelector<HTMLElement>("input, select, button:not([disabled])");
     first?.focus();
+    return () => {
+      if (returnFocus?.isConnected) returnFocus.focus();
+    };
   }, []);
 
   const confirm = () => {
@@ -125,6 +135,7 @@ function AcceptPicker({
             <select
               className="field-select"
               aria-label="Target state"
+              name="accept-target-state"
               value={existingStateId}
               onChange={(event) => setExistingStateId(event.target.value)}
             >
@@ -137,6 +148,7 @@ function AcceptPicker({
             New state name
             <input
               className="field-input"
+              name="accept-new-state-name"
               value={newStateName}
               onChange={(event) => setNewStateName(event.target.value)}
             />
@@ -155,6 +167,7 @@ function AcceptPicker({
 function MissingTransitionCard({
   hole,
   machine,
+  expanded,
   selected,
   onSelect,
   onAccept,
@@ -162,21 +175,57 @@ function MissingTransitionCard({
 }: {
   hole: DisplayHole;
   machine: Machine;
+  expanded: boolean;
   selected: boolean;
   onSelect: (hole: MissingTransition) => void;
   onAccept: (hole: MissingTransition) => void;
   onDismiss: (hole: MissingTransition) => void;
 }) {
   const evidence = holeEvidence(machine, hole);
-  const label = hole.rank === null ? "Structural / Unranked" : "Structural / Ranked";
+  const label = hole.rank === null
+    ? "Redline · Structural Gap · Unranked"
+    : "Redline · Structural Gap";
   const rationale = hole.rank?.rationale ?? "This state does not define what happens for this event.";
+
+  if (!expanded) {
+    return (
+      <article className="gap-card compact">
+        <button
+          className="gap-select compact-select"
+          type="button"
+          aria-expanded="false"
+          aria-pressed={selected}
+          aria-label={`Expand Structural Gap ${hole.stateId} x ${hole.eventId}`}
+          onClick={() => onSelect(hole)}
+        >
+          <span className="pair">{hole.stateId} x {hole.eventId}</span>
+          <span className="chevron" aria-hidden="true" />
+        </button>
+      </article>
+    );
+  }
 
   return (
     <article className={`gap-card expanded${selected ? " active" : ""}`}>
-      <button className="gap-select" type="button" aria-pressed={selected} onClick={() => onSelect(hole)}>
+      <button
+        className="gap-select"
+        type="button"
+        aria-expanded="true"
+        aria-pressed={selected}
+        aria-label={`Select Structural Gap ${hole.stateId} x ${hole.eventId}`}
+        onClick={() => onSelect(hole)}
+      >
         <p className="redline-label">{label}</p>
         <p className="pair">{hole.stateId} x {hole.eventId}</p>
-        {hole.rank !== null ? <p className="rank-metric">Relevance {relevanceLabel(hole.rank.relevance)}</p> : null}
+        {hole.rank !== null ? (
+          <div className="rank-metric relevance-metric">
+            <span>Relevance</span>
+            <span className="relevance-track" aria-hidden="true">
+              <span className="relevance-fill" style={{ width: relevanceLabel(hole.rank.relevance) }} />
+            </span>
+            <span className="relevance-value">{relevanceDecimal(hole.rank.relevance)}</span>
+          </div>
+        ) : null}
         <p className="rationale">{rationale}</p>
       </button>
       <div className="card-footer">
@@ -325,8 +374,11 @@ export function GapPanel() {
   const rankTruncated = useStore(appStore, (state) => state.rankTruncated);
   const suggestedEvents = useStore(appStore, (state) => state.suggestedEvents);
   const totalGaps = useStore(appStore, selectActiveGapCount);
+  const primaryHoles = displayHoles.slice(0, 3);
+  const remainingHoles = displayHoles.slice(3);
   const [acceptingHole, setAcceptingHole] = useState<MissingTransition | null>(null);
   const [matrixOpen, setMatrixOpen] = useState(false);
+  const paneRef = useRef<HTMLElement>(null);
   const dismissedHoles = useMemo(() => {
     if (machine === null) return [];
     const stateIds = new Set(machine.states.map((state) => state.id));
@@ -339,6 +391,9 @@ export function GapPanel() {
     clearCommandError();
     setAcceptingHole(hole);
   };
+  const focusFirstGap = () => {
+    window.setTimeout(() => paneRef.current?.querySelector<HTMLElement>(".gap-select")?.focus(), 0);
+  };
   const closePicker = () => {
     clearCommandError();
     setAcceptingHole(null);
@@ -346,10 +401,19 @@ export function GapPanel() {
   const acceptSuggestion = (suggestion: Parameters<typeof acceptSuggestedEvent>[0]) => {
     clearCommandError();
     acceptSuggestedEvent(suggestion);
+    if (appStore.getState().commandError === null) focusFirstGap();
+  };
+  const dismissWithFocus = (hole: MissingTransition) => {
+    dismissHole(hole);
+    focusFirstGap();
+  };
+  const undoWithFocus = (hole: MissingTransition) => {
+    undoDismiss(hole);
+    focusFirstGap();
   };
 
   return (
-    <section className="pane gaps-pane" aria-labelledby="gaps-heading">
+    <section ref={paneRef} className="pane gaps-pane" aria-labelledby="gaps-heading">
       <h2 className="pane-header" id="gaps-heading">
         <GapIcon className="pane-icon" />
         Gaps ({totalGaps})
@@ -368,43 +432,26 @@ export function GapPanel() {
           ) : null}
 
           <h3 className="gap-section-heading">Missing Transitions</h3>
-          {displayHoles.map((hole) => (
-            <MissingTransitionCard
-              hole={hole}
-              machine={machine}
-              selected={pairKey(hole) === selectedHoleKey}
-              onSelect={selectHole}
-              onAccept={openPicker}
-              onDismiss={dismissHole}
-              key={pairKey(hole)}
-            />
-          ))}
-
-          {dismissedHoles.length > 0 ? (
-            <>
-              <div className="section-rule" />
-              <h3 className="gap-section-heading">Dismissed</h3>
-              {dismissedHoles.map((hole) => (
-                <div className="dismissed-row" key={pairKey(hole)}>
-                  <span className="pair">{hole.stateId} x {hole.eventId}</span>
-                  <button className="quiet-button" type="button" onClick={() => undoDismiss(hole)}>Undo {hole.stateId} x {hole.eventId}</button>
-                </div>
-              ))}
-            </>
-          ) : null}
-
-          <div className="section-rule" />
-          <h3 className="gap-section-heading">Unreachable States</h3>
-          {gaps.unreachableStateIds.map((stateId) => <StructuralStateCard machine={machine} stateId={stateId} key={stateId} />)}
-
-          <div className="section-rule" />
-          <h3 className="gap-section-heading">Dead-End States</h3>
-          {gaps.deadEndStateIds.map((stateId) => <StructuralStateCard machine={machine} stateId={stateId} key={stateId} />)}
+          {primaryHoles.map((hole, index) => {
+            const selected = pairKey(hole) === selectedHoleKey;
+            return (
+              <MissingTransitionCard
+                hole={hole}
+                machine={machine}
+                expanded={selected || (selectedHoleKey === null && index === 0)}
+                selected={selected}
+                onSelect={selectHole}
+                onAccept={openPicker}
+                onDismiss={dismissWithFocus}
+                key={pairKey(hole)}
+              />
+            );
+          })}
 
           {suggestedEvents.length > 0 ? (
             <>
               <div className="section-rule" />
-              <h3 className="gap-section-heading">Suggested Events</h3>
+              <h3 className="gap-section-heading suggested-section-heading">Suggested ({suggestedEvents.length})</h3>
               {suggestedEvents.map((suggestion) => (
                 <article className="suggested-card" key={suggestion.id}>
                   <span className="suggested-label">Suggested</span>
@@ -422,13 +469,68 @@ export function GapPanel() {
           <button className="quiet-button matrix-link" type="button" onClick={() => setMatrixOpen(true)}>
             Show all {gaps.missingTransitions.length} undefined pairs
           </button>
+
+          {remainingHoles.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Remaining Missing Transitions ({remainingHoles.length})</h3>
+              {remainingHoles.map((hole) => {
+                const selected = pairKey(hole) === selectedHoleKey;
+                return (
+                  <MissingTransitionCard
+                    hole={hole}
+                    machine={machine}
+                    expanded={selected}
+                    selected={selected}
+                    onSelect={selectHole}
+                    onAccept={openPicker}
+                    onDismiss={dismissWithFocus}
+                    key={pairKey(hole)}
+                  />
+                );
+              })}
+            </>
+          ) : null}
+
+          {dismissedHoles.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Dismissed</h3>
+              {dismissedHoles.map((hole) => (
+                <div className="dismissed-row" key={pairKey(hole)}>
+                  <span className="pair">{hole.stateId} x {hole.eventId}</span>
+                  <button className="quiet-button" type="button" onClick={() => undoWithFocus(hole)}>Undo {hole.stateId} x {hole.eventId}</button>
+                </div>
+              ))}
+            </>
+          ) : null}
+
+          {gaps.unreachableStateIds.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Unreachable States</h3>
+              {gaps.unreachableStateIds.map((stateId) => <StructuralStateCard machine={machine} stateId={stateId} key={stateId} />)}
+            </>
+          ) : null}
+
+          {gaps.deadEndStateIds.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Dead-End States</h3>
+              {gaps.deadEndStateIds.map((stateId) => <StructuralStateCard machine={machine} stateId={stateId} key={stateId} />)}
+            </>
+          ) : null}
         </div>
       )}
       {machine !== null && acceptingHole !== null ? (
         <AcceptPicker
           machine={machine}
           hole={acceptingHole}
-          onAccept={(target) => acceptHole(acceptingHole, target).ok}
+          onAccept={(target) => {
+            const result = acceptHole(acceptingHole, target);
+            if (result.ok) focusFirstGap();
+            return result.ok;
+          }}
           onClose={closePicker}
           errorMessage={commandError?.message ?? null}
         />

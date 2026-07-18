@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 
 import accountSpec from "../../samples/account-signup.txt?raw";
@@ -23,6 +23,55 @@ const samples = sampleInputs.map((sample) => ({
   spec: sample.spec,
   cache: decodeCachedSamplePayload(sample.cacheData, sample.spec),
 }));
+
+function ReplacementDialog({
+  message,
+  onCancel,
+  onConfirm,
+}: {
+  message: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
+    const returnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    return () => {
+      if (dialog.open && typeof dialog.close === "function") dialog.close();
+      if (returnFocus?.isConnected) returnFocus.focus();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="replacement-dialog"
+      aria-labelledby="replacement-dialog-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onCancel();
+      }}
+    >
+      <form onSubmit={(event) => event.preventDefault()}>
+        <h3 id="replacement-dialog-title">Replace your canvas edits?</h3>
+        <p>{message}</p>
+        <div className="dialog-actions">
+          <button className="dialog-button" type="button" autoFocus onClick={onCancel}>Keep editing</button>
+          <button className="dialog-button primary" type="button" onClick={onConfirm}>
+            Replace and continue
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
 
 export function SpecPane() {
   const draftSpec = useStore(appStore, (state) => state.draftSpec);
@@ -97,6 +146,7 @@ export function SpecPane() {
           <textarea
             className="spec-textarea"
             aria-label="Behavioral Spec"
+            name="behavioral-spec"
             value={draftSpec}
             maxLength={4_001}
             placeholder="A new order starts in Cart. When the customer checks out, it moves to Processing..."
@@ -157,18 +207,11 @@ export function SpecPane() {
         </div>
       )}
       {replacementConfirmation !== null ? (
-        <dialog className="replacement-dialog" open aria-labelledby="replacement-dialog-title">
-          <form method="dialog">
-            <h3 id="replacement-dialog-title">Replace your canvas edits?</h3>
-            <p>{replacementConfirmation}</p>
-            <div className="dialog-actions">
-              <button className="dialog-button" type="button" onClick={cancelReplacement}>Keep editing</button>
-              <button className="dialog-button primary" type="button" onClick={() => void confirmReplacement()}>
-                Replace and continue
-              </button>
-            </div>
-          </form>
-        </dialog>
+        <ReplacementDialog
+          message={replacementConfirmation}
+          onCancel={cancelReplacement}
+          onConfirm={() => void confirmReplacement()}
+        />
       ) : null}
     </section>
   );

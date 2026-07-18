@@ -65,6 +65,7 @@ test("matrix drawer keeps dismissed pairs visible and labels every cell state wi
   render(<GapPanel />);
   expect(screen.getByRole("heading", { name: /Gaps \(10\)/ })).not.toBeNull();
 
+  await user.click(screen.getByRole("button", { name: /Structural Gap processing x cancel/i }));
   const flagshipDismiss = screen.getAllByRole("button", { name: "Dismiss" }).find((button) =>
     button.closest("article")?.textContent?.includes("processing x cancel"),
   );
