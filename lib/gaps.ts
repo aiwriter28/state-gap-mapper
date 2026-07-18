@@ -1,4 +1,4 @@
-import type { Gaps, Machine, MissingTransition } from "./machine";
+import type { Gaps, Machine, MissingTransition } from "./machine.js";
 
 export function computeGaps(machine: Machine): Gaps {
   const handledEventsByState = new Map<string, Set<string>>();

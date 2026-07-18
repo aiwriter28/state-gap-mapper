@@ -1,4 +1,4 @@
-import { DOMAIN_LIMITS } from "./machine";
+import { DOMAIN_LIMITS } from "./machine.js";
 
 const idSchema = {
   type: "string",

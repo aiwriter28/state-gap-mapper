@@ -6,9 +6,9 @@ import {
   type MachineState,
   type MissingTransition,
   type SuggestedEvent,
-} from "./machine";
-import { renderStub } from "./teststub";
-import { type VErr, validateMachineShape } from "./validate";
+} from "./machine.js";
+import { renderStub } from "./teststub.js";
+import { type VErr, validateMachineShape } from "./validate.js";
 
 export type CommandFailure = { ok: false; error: VErr };
 export type CommandResult =

@@ -13,7 +13,7 @@ import {
   type SuggestedEvent,
   type Transition,
   type Viability,
-} from "./machine";
+} from "./machine.js";
 
 /*
  * Decoding intentionally checks only representation, primitive types, and hard

@@ -1,4 +1,4 @@
-import type { DisplayHole, MissingTransition, RankedHole } from "./machine";
+import type { DisplayHole, MissingTransition, RankedHole } from "./machine.js";
 
 function pairKey(hole: MissingTransition): string {
   return `${hole.stateId}\u0000${hole.eventId}`;

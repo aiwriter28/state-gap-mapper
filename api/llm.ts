@@ -3,35 +3,35 @@ import type { IncomingHttpHeaders } from "node:http";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 
-import { createRequestBudget, type RequestBudget } from "../lib/budget";
+import { createRequestBudget, type RequestBudget } from "../lib/budget.js";
 import {
   decodeExtractionOutput,
   decodeOpEnvelope,
   decodeRankOutput,
   type DecodeErr,
-} from "../lib/decode";
-import { apiError, type ApiErrorCode } from "../lib/errors";
-import { computeGaps } from "../lib/gaps";
+} from "../lib/decode.js";
+import { apiError, type ApiErrorCode } from "../lib/errors.js";
+import { computeGaps } from "../lib/gaps.js";
 import type {
   ExtractionOutput,
   Machine,
   OpEnvelope,
   RankOutput,
   Sentence,
-} from "../lib/machine";
+} from "../lib/machine.js";
 import {
   EXTRACTION_DEVELOPER_PROMPT,
   EXTRACTION_SCHEMA,
   RANK_DEVELOPER_PROMPT,
   RANK_SCHEMA,
-} from "../lib/schemas";
-import { splitSpec } from "../lib/sentences";
+} from "../lib/schemas.js";
+import { splitSpec } from "../lib/sentences.js";
 import {
   validateExtraction,
   validateMachineShape,
   validateRankOutput,
   type VErr,
-} from "../lib/validate";
+} from "../lib/validate.js";
 
 const MAX_RAW_BODY_BYTES = 64 * 1_024;
 const MAX_SPEC_CHARACTERS = 4_000;

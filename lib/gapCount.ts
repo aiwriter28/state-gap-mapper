@@ -1,4 +1,4 @@
-import type { Gaps } from "./machine";
+import type { Gaps } from "./machine.js";
 
 /** Counts missing pairs plus each structurally affected state once. */
 export function gapCount(gaps: Gaps): number {

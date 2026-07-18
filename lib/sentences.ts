@@ -1,4 +1,4 @@
-import type { Sentence } from "./machine";
+import type { Sentence } from "./machine.js";
 
 const SENTENCE_BOUNDARY =
   /(?:\r?\n)+|(?<=[!?])\s+|(?<!e\.g\.)(?<=[.])\s+/i;

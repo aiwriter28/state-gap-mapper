@@ -3,7 +3,7 @@ import {
   type ExtractionOutput,
   type Machine,
   type RankOutput,
-} from "./machine";
+} from "./machine.js";
 
 const ID_PATTERN = /^[a-z0-9_]+$/;
 

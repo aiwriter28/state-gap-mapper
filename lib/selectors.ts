@@ -1,4 +1,4 @@
-import type { DisplayHole, Gaps, Machine } from "./machine";
+import type { DisplayHole, Gaps, Machine } from "./machine.js";
 
 export type MatrixCellStatus = "defined" | "not-applicable" | "dismissed" | "hole";
 
@@ -69,4 +69,3 @@ export function stateEventMatrix(
     }),
   }));
 }
-
