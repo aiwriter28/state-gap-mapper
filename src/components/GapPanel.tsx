@@ -1,0 +1,547 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useStore } from "zustand";
+
+import type { HoleTarget } from "../../lib/commands";
+import { holeEvidence, type DisplayHole, type Machine, type MissingTransition } from "../../lib/machine";
+import {
+  selectActiveGapCount,
+  stateEventMatrix,
+  type MatrixCellStatus,
+} from "../../lib/selectors";
+import { GapIcon } from "./Icons";
+import { appStore } from "../store";
+
+function pairKey(hole: MissingTransition): string {
+  return `${hole.stateId}\u0000${hole.eventId}`;
+}
+
+function holeFromPairKey(key: string): MissingTransition | null {
+  const separator = key.indexOf("\u0000");
+  if (separator < 1 || separator === key.length - 1) return null;
+  return { stateId: key.slice(0, separator), eventId: key.slice(separator + 1) };
+}
+
+function relevanceLabel(relevance: number): string {
+  return `${Math.round(relevance * 100)}%`;
+}
+
+function relevanceDecimal(relevance: number): string {
+  return relevance.toFixed(2);
+}
+
+function stateEvidence(machine: Machine, stateId: string): number[] {
+  return machine.states.find((state) => state.id === stateId)?.evidence ?? [];
+}
+
+function AcceptPicker({
+  machine,
+  hole,
+  onAccept,
+  onClose,
+  errorMessage,
+}: {
+  machine: Machine;
+  hole: MissingTransition;
+  onAccept: (target: HoleTarget) => boolean;
+  onClose: () => void;
+  errorMessage: string | null;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [targetKind, setTargetKind] = useState<"existing" | "new">("existing");
+  const [existingStateId, setExistingStateId] = useState("");
+  const [newStateName, setNewStateName] = useState("");
+  const canConfirm = targetKind === "existing" ? existingStateId.length > 0 : newStateName.trim().length > 0;
+
+  useEffect(() => {
+    const returnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const first = dialogRef.current?.querySelector<HTMLElement>("input, select, button:not([disabled])");
+    first?.focus();
+    return () => {
+      if (returnFocus?.isConnected) returnFocus.focus();
+    };
+  }, []);
+
+  const confirm = () => {
+    if (!canConfirm) return;
+    const target: HoleTarget = targetKind === "existing"
+      ? { kind: "existing", stateId: existingStateId }
+      : { kind: "new", name: newStateName };
+    if (onAccept(target)) onClose();
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key === "Enter" && (event.target as HTMLElement).tagName !== "BUTTON") {
+      event.preventDefault();
+      confirm();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), input:not([disabled]), select:not([disabled])",
+    ) ?? [])];
+    const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    if (event.shiftKey && currentIndex === 0) {
+      event.preventDefault();
+      focusable.at(-1)?.focus();
+    } else if (!event.shiftKey && currentIndex === focusable.length - 1) {
+      event.preventDefault();
+      focusable[0]?.focus();
+    }
+  };
+
+  return (
+    <div className="accept-backdrop">
+      <div
+        ref={dialogRef}
+        className="accept-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Accept Missing Transition"
+        onKeyDown={onKeyDown}
+      >
+        <h3>Accept Missing Transition</h3>
+        <p className="accept-picker-pair">{hole.stateId} x {hole.eventId}</p>
+        <fieldset>
+          <legend>Target</legend>
+          <label className="picker-choice">
+            <input
+              type="radio"
+              name="target-kind"
+              checked={targetKind === "existing"}
+              onChange={() => setTargetKind("existing")}
+            />
+            Existing state
+          </label>
+          <label className="picker-choice">
+            <input
+              type="radio"
+              name="target-kind"
+              checked={targetKind === "new"}
+              onChange={() => setTargetKind("new")}
+            />
+            New state
+          </label>
+        </fieldset>
+        {targetKind === "existing" ? (
+          <label className="field-label">
+            Target state
+            <select
+              className="field-select"
+              aria-label="Target state"
+              name="accept-target-state"
+              value={existingStateId}
+              onChange={(event) => setExistingStateId(event.target.value)}
+            >
+              <option value="">Choose a state</option>
+              {machine.states.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
+            </select>
+          </label>
+        ) : (
+          <label className="field-label">
+            New state name
+            <input
+              className="field-input"
+              name="accept-new-state-name"
+              value={newStateName}
+              onChange={(event) => setNewStateName(event.target.value)}
+            />
+          </label>
+        )}
+        {errorMessage !== null ? <p className="command-feedback" role="alert">{errorMessage}</p> : null}
+        <div className="dialog-actions">
+          <button className="dialog-button" type="button" onClick={onClose}>Cancel</button>
+          <button className="dialog-button primary" type="button" disabled={!canConfirm} onClick={confirm}>Confirm Accept</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MissingTransitionCard({
+  hole,
+  machine,
+  expanded,
+  selected,
+  onSelect,
+  onAccept,
+  onDismiss,
+}: {
+  hole: DisplayHole;
+  machine: Machine;
+  expanded: boolean;
+  selected: boolean;
+  onSelect: (hole: MissingTransition) => void;
+  onAccept: (hole: MissingTransition) => void;
+  onDismiss: (hole: MissingTransition) => void;
+}) {
+  const evidence = holeEvidence(machine, hole);
+  const label = hole.rank === null
+    ? "Redline · Structural Gap · Unranked"
+    : "Redline · Structural Gap";
+  const rationale = hole.rank?.rationale ?? "This state does not define what happens for this event.";
+
+  if (!expanded) {
+    return (
+      <article className="gap-card compact">
+        <button
+          className="gap-select compact-select"
+          type="button"
+          aria-expanded="false"
+          aria-pressed={selected}
+          aria-label={`Expand Structural Gap ${hole.stateId} x ${hole.eventId}`}
+          onClick={() => onSelect(hole)}
+        >
+          <span className="pair">{hole.stateId} x {hole.eventId}</span>
+          <span className="chevron" aria-hidden="true" />
+        </button>
+      </article>
+    );
+  }
+
+  return (
+    <article className={`gap-card expanded${selected ? " active" : ""}`}>
+      <button
+        className="gap-select"
+        type="button"
+        aria-expanded="true"
+        aria-pressed={selected}
+        aria-label={`Select Structural Gap ${hole.stateId} x ${hole.eventId}`}
+        onClick={() => onSelect(hole)}
+      >
+        <p className="redline-label">{label}</p>
+        <p className="pair">{hole.stateId} x {hole.eventId}</p>
+        {hole.rank !== null ? (
+          <div className="rank-metric relevance-metric">
+            <span>Relevance</span>
+            <span className="relevance-track" aria-hidden="true">
+              <span className="relevance-fill" style={{ width: relevanceLabel(hole.rank.relevance) }} />
+            </span>
+            <span className="relevance-value">{relevanceDecimal(hole.rank.relevance)}</span>
+          </div>
+        ) : null}
+        <p className="rationale">{rationale}</p>
+      </button>
+      <div className="card-footer">
+        {evidence.map((sentence) => <span className="evidence-chip" key={sentence}>S{sentence}</span>)}
+        <div className="card-actions">
+          <button className="quiet-button" type="button" onClick={() => onAccept(hole)}>Accept</button>
+          <button className="quiet-button" type="button" onClick={() => onDismiss(hole)}>Dismiss</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function StructuralStateCard({ machine, stateId }: { machine: Machine; stateId: string }) {
+  const evidence = stateEvidence(machine, stateId);
+  return (
+    <article className="structural-card" key={stateId}>
+      <span className="structural-label">Structural</span>
+      <p className="pair">{stateId}</p>
+      <div className="card-footer">
+        {evidence.map((sentence) => <span className="evidence-chip" key={sentence}>S{sentence}</span>)}
+      </div>
+    </article>
+  );
+}
+
+const MATRIX_CELL_COPY: Record<MatrixCellStatus, string> = {
+  defined: "defined",
+  "not-applicable": "not applicable",
+  dismissed: "dismissed",
+  hole: "Missing Transition",
+};
+
+const MATRIX_CELL_VISIBLE_COPY: Record<MatrixCellStatus, string> = {
+  defined: "drawn",
+  "not-applicable": "n/a",
+  dismissed: "dismissed",
+  hole: "hole",
+};
+
+function MatrixDialog({
+  machine,
+  dismissedPairKeys,
+  onClose,
+}: {
+  machine: Machine;
+  dismissedPairKeys: ReadonlySet<string>;
+  onClose: () => void;
+}) {
+  const rows = useMemo(
+    () => stateEventMatrix(machine, dismissedPairKeys),
+    [dismissedPairKeys, machine],
+  );
+  const states = useMemo(
+    () => new Map(machine.states.map((state) => [state.id, state])),
+    [machine.states],
+  );
+  const events = useMemo(
+    () => new Map(machine.events.map((event) => [event.id, event])),
+    [machine.events],
+  );
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    return () => {
+      if (dialog.open && typeof dialog.close === "function") dialog.close();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="matrix-dialog"
+      aria-labelledby="matrix-dialog-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      <div className="matrix-dialog-content">
+        <h2 className="dialog-title" id="matrix-dialog-title">State x event matrix</h2>
+        <p className="dialog-copy">Every undefined pair remains visible. Final-state cells are not applicable.</p>
+        <div className="matrix-wrap">
+          <table className="matrix-table">
+            <thead>
+              <tr>
+                <th scope="col">state</th>
+                {machine.events.map((event) => <th scope="col" key={event.id}>{event.id}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.stateId}>
+                  <th scope="row">{row.stateId}</th>
+                  {row.cells.map((cell) => {
+                    const stateName = states.get(cell.stateId)?.name ?? cell.stateId;
+                    const eventName = events.get(cell.eventId)?.name ?? cell.eventId;
+                    const className = cell.status === "not-applicable" ? "na" : cell.status;
+                    return (
+                      <td
+                        className={className}
+                        aria-label={`${stateName}, ${eventName}: ${MATRIX_CELL_COPY[cell.status]}`}
+                        title={`${stateName} x ${eventName}: ${MATRIX_CELL_COPY[cell.status]}`}
+                        key={cell.eventId}
+                      >
+                        {MATRIX_CELL_VISIBLE_COPY[cell.status]}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="dialog-actions">
+          <button className="dialog-button primary" type="button" autoFocus onClick={onClose}>Close matrix</button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+export function GapPanel() {
+  const machine = useStore(appStore, (state) => state.machine);
+  const gaps = useStore(appStore, (state) => state.gaps);
+  const displayHoles = useStore(appStore, (state) => state.displayHoles);
+  const dismissedPairKeys = useStore(appStore, (state) => state.dismissedPairKeys);
+  const selectedHoleKey = useStore(appStore, (state) => state.selectedHoleKey);
+  const selectHole = useStore(appStore, (state) => state.selectHole);
+  const acceptHole = useStore(appStore, (state) => state.acceptHole);
+  const acceptSuggestedEvent = useStore(appStore, (state) => state.acceptSuggestedEvent);
+  const dismissHole = useStore(appStore, (state) => state.dismissHole);
+  const undoDismiss = useStore(appStore, (state) => state.undoDismiss);
+  const commandError = useStore(appStore, (state) => state.commandError);
+  const clearCommandError = useStore(appStore, (state) => state.clearCommandError);
+  const rank = useStore(appStore, (state) => state.rank);
+  const rankPending = useStore(appStore, (state) => state.rankPending);
+  const rankError = useStore(appStore, (state) => state.rankError);
+  const rankTruncated = useStore(appStore, (state) => state.rankTruncated);
+  const suggestedEvents = useStore(appStore, (state) => state.suggestedEvents);
+  const totalGaps = useStore(appStore, selectActiveGapCount);
+  const primaryHoles = displayHoles.slice(0, 3);
+  const remainingHoles = displayHoles.slice(3);
+  const [acceptingHole, setAcceptingHole] = useState<MissingTransition | null>(null);
+  const [matrixOpen, setMatrixOpen] = useState(false);
+  const paneRef = useRef<HTMLElement>(null);
+  const dismissedHoles = useMemo(() => {
+    if (machine === null) return [];
+    const stateIds = new Set(machine.states.map((state) => state.id));
+    const eventIds = new Set(machine.events.map((event) => event.id));
+    return [...dismissedPairKeys]
+      .map(holeFromPairKey)
+      .filter((hole): hole is MissingTransition => hole !== null && stateIds.has(hole.stateId) && eventIds.has(hole.eventId));
+  }, [dismissedPairKeys, machine]);
+  const openPicker = (hole: MissingTransition) => {
+    clearCommandError();
+    setAcceptingHole(hole);
+  };
+  const focusFirstGap = () => {
+    window.setTimeout(() => paneRef.current?.querySelector<HTMLElement>(".gap-select")?.focus(), 0);
+  };
+  const closePicker = () => {
+    clearCommandError();
+    setAcceptingHole(null);
+  };
+  const acceptSuggestion = (suggestion: Parameters<typeof acceptSuggestedEvent>[0]) => {
+    clearCommandError();
+    acceptSuggestedEvent(suggestion);
+    if (appStore.getState().commandError === null) focusFirstGap();
+  };
+  const dismissWithFocus = (hole: MissingTransition) => {
+    dismissHole(hole);
+    focusFirstGap();
+  };
+  const undoWithFocus = (hole: MissingTransition) => {
+    undoDismiss(hole);
+    focusFirstGap();
+  };
+
+  return (
+    <section ref={paneRef} className="pane gaps-pane" aria-labelledby="gaps-heading">
+      <h2 className="pane-header" id="gaps-heading">
+        <GapIcon className="pane-icon" />
+        Gaps ({totalGaps})
+        <button className="quiet-button header-action" type="button" disabled={machine === null || rankPending} onClick={() => void rank()}>
+          Re-rank
+        </button>
+      </h2>
+      {machine === null ? (
+        <div className="gap-empty">No Structural Gaps yet.<br />They will appear after a spec is mapped.</div>
+      ) : (
+        <div className="gap-scroll">
+          {rankError !== null ? <p className="rank-message">Ranking is unavailable right now. Structural gaps are still shown.</p> : null}
+          {rankTruncated ? <p className="rank-message">Ranked the first 100 holes; the rest remain listed as Unranked.</p> : null}
+          {commandError !== null && acceptingHole === null ? (
+            <p className="command-feedback" role="alert">{commandError.message}</p>
+          ) : null}
+
+          <h3 className="gap-section-heading">Missing Transitions</h3>
+          {primaryHoles.map((hole, index) => {
+            const selected = pairKey(hole) === selectedHoleKey;
+            return (
+              <MissingTransitionCard
+                hole={hole}
+                machine={machine}
+                expanded={selected || (selectedHoleKey === null && index === 0)}
+                selected={selected}
+                onSelect={selectHole}
+                onAccept={openPicker}
+                onDismiss={dismissWithFocus}
+                key={pairKey(hole)}
+              />
+            );
+          })}
+
+          {suggestedEvents.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading suggested-section-heading">Suggested ({suggestedEvents.length})</h3>
+              {suggestedEvents.map((suggestion) => (
+                <article className="suggested-card" key={suggestion.id}>
+                  <span className="suggested-label">Suggested</span>
+                  <p className="pair">{suggestion.id}</p>
+                  <p className="rank-metric">Confidence {relevanceLabel(suggestion.confidence)}</p>
+                  <p className="rationale">{suggestion.rationale}</p>
+                  <div className="card-actions suggested-actions">
+                    <button className="quiet-button" type="button" onClick={() => acceptSuggestion(suggestion)}>Accept</button>
+                  </div>
+                </article>
+              ))}
+            </>
+          ) : null}
+
+          <button className="quiet-button matrix-link" type="button" onClick={() => setMatrixOpen(true)}>
+            Show all {gaps.missingTransitions.length} undefined pairs
+          </button>
+
+          {remainingHoles.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Remaining Missing Transitions ({remainingHoles.length})</h3>
+              {remainingHoles.map((hole) => {
+                const selected = pairKey(hole) === selectedHoleKey;
+                return (
+                  <MissingTransitionCard
+                    hole={hole}
+                    machine={machine}
+                    expanded={selected}
+                    selected={selected}
+                    onSelect={selectHole}
+                    onAccept={openPicker}
+                    onDismiss={dismissWithFocus}
+                    key={pairKey(hole)}
+                  />
+                );
+              })}
+            </>
+          ) : null}
+
+          {dismissedHoles.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Dismissed</h3>
+              {dismissedHoles.map((hole) => (
+                <div className="dismissed-row" key={pairKey(hole)}>
+                  <span className="pair">{hole.stateId} x {hole.eventId}</span>
+                  <button className="quiet-button" type="button" onClick={() => undoWithFocus(hole)}>Undo {hole.stateId} x {hole.eventId}</button>
+                </div>
+              ))}
+            </>
+          ) : null}
+
+          {gaps.unreachableStateIds.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Unreachable States</h3>
+              {gaps.unreachableStateIds.map((stateId) => <StructuralStateCard machine={machine} stateId={stateId} key={stateId} />)}
+            </>
+          ) : null}
+
+          {gaps.deadEndStateIds.length > 0 ? (
+            <>
+              <div className="section-rule" />
+              <h3 className="gap-section-heading">Dead-End States</h3>
+              {gaps.deadEndStateIds.map((stateId) => <StructuralStateCard machine={machine} stateId={stateId} key={stateId} />)}
+            </>
+          ) : null}
+        </div>
+      )}
+      {machine !== null && acceptingHole !== null ? (
+        <AcceptPicker
+          machine={machine}
+          hole={acceptingHole}
+          onAccept={(target) => {
+            const result = acceptHole(acceptingHole, target);
+            if (result.ok) focusFirstGap();
+            return result.ok;
+          }}
+          onClose={closePicker}
+          errorMessage={commandError?.message ?? null}
+        />
+      ) : null}
+      {machine !== null && matrixOpen ? (
+        <MatrixDialog
+          machine={machine}
+          dismissedPairKeys={dismissedPairKeys}
+          onClose={() => setMatrixOpen(false)}
+        />
+      ) : null}
+    </section>
+  );
+}

@@ -19,8 +19,7 @@ coverage/
 .nyc_output/
 
 # Secrets — never commit real env files (keep .env.example)
-.env
-.env.*
+.env*
 !.env.example
 
 # Logs
@@ -35,6 +34,8 @@ pnpm-debug.log*
 .eslintcache
 graphify-out/
 .worktrees/
+.superpowers/
+samples/.cache-stage-*/
 
 # OS / editor
 .DS_Store

@@ -1,0 +1,5 @@
+When someone signs up, their account is created in the Unverified state.
+We email a verification code, and when the user enters it correctly the account becomes Active.
+If the code is entered incorrectly three times, the account moves to Locked.
+A support agent can unlock a Locked account, returning it to Unverified.
+An Active account can be deactivated by its owner, moving it to Deactivated.

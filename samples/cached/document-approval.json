@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "sentences": [
+    { "index": 1, "text": "A document begins as a Draft." },
+    { "index": 2, "text": "The author can submit a Draft for review, moving it to In Review." },
+    { "index": 3, "text": "A reviewer can approve the document, moving it from In Review to Approved." },
+    { "index": 4, "text": "A reviewer can request changes, sending the document from In Review back to Draft." },
+    { "index": 5, "text": "An Approved document can be published, moving it to Published." },
+    { "index": 6, "text": "The author can archive a Draft, moving it to Archived." }
+  ],
+  "machine": {
+    "states": [
+      { "id": "draft", "name": "Draft", "isInitial": true, "isFinal": false, "evidence": [1] },
+      { "id": "in_review", "name": "In Review", "isInitial": false, "isFinal": false, "evidence": [2] },
+      { "id": "approved", "name": "Approved", "isInitial": false, "isFinal": false, "evidence": [3] },
+      { "id": "published", "name": "Published", "isInitial": false, "isFinal": true, "evidence": [5] },
+      { "id": "archived", "name": "Archived", "isInitial": false, "isFinal": true, "evidence": [6] }
+    ],
+    "events": [
+      { "id": "submit", "name": "Submit", "surfaceForms": ["submit for review"], "evidence": [2] },
+      { "id": "approve", "name": "Approve", "surfaceForms": ["approve"], "evidence": [3] },
+      { "id": "request_changes", "name": "Request changes", "surfaceForms": ["request changes"], "evidence": [4] },
+      { "id": "publish", "name": "Publish", "surfaceForms": ["published"], "evidence": [5] },
+      { "id": "archive", "name": "Archive", "surfaceForms": ["archive"], "evidence": [6] }
+    ],
+    "transitions": [
+      { "from": "draft", "event": "submit", "to": "in_review", "evidence": [2] },
+      { "from": "in_review", "event": "approve", "to": "approved", "evidence": [3] },
+      { "from": "in_review", "event": "request_changes", "to": "draft", "evidence": [4] },
+      { "from": "approved", "event": "publish", "to": "published", "evidence": [5] },
+      { "from": "draft", "event": "archive", "to": "archived", "evidence": [6] }
+    ]
+  },
+  "rankedHoles": [
+    { "stateId": "draft", "eventId": "approve", "relevance": 0.42, "rationale": "Approval before review may need an explicit rejection rule.", "suggestedTargetStateId": "approved" },
+    { "stateId": "draft", "eventId": "request_changes", "relevance": 0.25, "rationale": "Requesting changes on a Draft may be intentionally redundant.", "suggestedTargetStateId": "draft" },
+    { "stateId": "draft", "eventId": "publish", "relevance": 0.75, "rationale": "The spec should explicitly prevent publishing an unapproved Draft.", "suggestedTargetStateId": "published" },
+    { "stateId": "in_review", "eventId": "submit", "relevance": 0.21, "rationale": "Repeated submission during review should have an idempotent outcome.", "suggestedTargetStateId": "in_review" },
+    { "stateId": "in_review", "eventId": "publish", "relevance": 0.72, "rationale": "Publishing before approval should be explicitly prevented or defined.", "suggestedTargetStateId": "published" },
+    { "stateId": "in_review", "eventId": "archive", "relevance": 0.85, "rationale": "Authors may need to withdraw and archive a document during review.", "suggestedTargetStateId": "archived" },
+    { "stateId": "approved", "eventId": "submit", "relevance": 0.35, "rationale": "Resubmission after approval should have a defined outcome.", "suggestedTargetStateId": "in_review" },
+    { "stateId": "approved", "eventId": "approve", "relevance": 0.3, "rationale": "Repeated approval should be explicitly idempotent.", "suggestedTargetStateId": "approved" },
+    { "stateId": "approved", "eventId": "request_changes", "relevance": 0.97, "rationale": "The spec does not say whether approval can be revoked for further changes.", "suggestedTargetStateId": "draft" },
+    { "stateId": "approved", "eventId": "archive", "relevance": 0.78, "rationale": "An approved document may need an archive path without publishing.", "suggestedTargetStateId": "archived" }
+  ],
+  "suggestedEvents": [
+    { "id": "reject", "name": "Reject", "surfaceForms": ["rejects the document"], "rationale": "Review workflows commonly distinguish rejection from a request for changes.", "confidence": 0.72 }
+  ],
+  "truncated": false,
+  "droppedSuggestions": 0
+}

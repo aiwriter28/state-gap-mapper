@@ -1,0 +1,23 @@
+{
+  "states": [
+    { "id": "cart", "name": "Cart", "isInitial": true, "isFinal": false, "evidence": [1] },
+    { "id": "processing", "name": "Processing", "isInitial": false, "isFinal": false, "evidence": [2] },
+    { "id": "paid", "name": "Paid", "isInitial": false, "isFinal": false, "evidence": [3] },
+    { "id": "cancelled", "name": "Cancelled", "isInitial": false, "isFinal": true, "evidence": [5] },
+    { "id": "shipped", "name": "Shipped", "isInitial": false, "isFinal": true, "evidence": [6] }
+  ],
+  "events": [
+    { "id": "checkout", "name": "Checkout", "surfaceForms": ["checks out"], "evidence": [2] },
+    { "id": "payment_succeeded", "name": "Payment succeeded", "surfaceForms": ["payment succeeds"], "evidence": [3] },
+    { "id": "payment_failed", "name": "Payment failed", "surfaceForms": ["payment fails"], "evidence": [4] },
+    { "id": "cancel", "name": "Cancel", "surfaceForms": ["cancel"], "evidence": [5] },
+    { "id": "handed_to_courier", "name": "Handed to courier", "surfaceForms": ["handed to the courier"], "evidence": [6] }
+  ],
+  "transitions": [
+    { "from": "cart", "event": "checkout", "to": "processing", "evidence": [2] },
+    { "from": "processing", "event": "payment_succeeded", "to": "paid", "evidence": [3] },
+    { "from": "processing", "event": "payment_failed", "to": "cart", "evidence": [4] },
+    { "from": "cart", "event": "cancel", "to": "cancelled", "evidence": [5] },
+    { "from": "paid", "event": "handed_to_courier", "to": "shipped", "evidence": [6] }
+  ]
+}
