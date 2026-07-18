@@ -57,6 +57,45 @@ const validExtraction = () => ({
   machine: validMachine(),
 });
 
+const validRankMachine = (): Machine => ({
+  ...validMachine(),
+  events: [
+    ...validMachine().events,
+    {
+      id: "cancel",
+      name: "Cancel",
+      surfaceForms: ["cancel"],
+      evidence: [1],
+    },
+  ],
+});
+
+const validRankOutput = () => ({
+  rankedHoles: [{
+    stateId: "idle",
+    eventId: "cancel",
+    relevance: 0.93,
+    rationale: "Cancellation is defined elsewhere and needs a decision here.",
+    suggestedTargetStateId: "done",
+  }],
+  suggestedEvents: [
+    {
+      id: "timeout",
+      name: "Timeout",
+      surfaceForms: ["times out"],
+      rationale: "Long-running work may time out.",
+      confidence: 0.72,
+    },
+    {
+      id: "start",
+      name: "Duplicate event id",
+      surfaceForms: ["starts again"],
+      rationale: "Must be removed because it collides with the machine.",
+      confidence: 0.5,
+    },
+  ],
+});
+
 const invalidDanglingExtraction = () => ({
   ...validExtraction(),
   machine: {
@@ -280,6 +319,122 @@ describe("semantic repair loop", () => {
   });
 });
 
+describe("rank operation", () => {
+  const rankRequest = (machine: Machine = validRankMachine()) => request(JSON.stringify({
+    op: "rank",
+    machine,
+    sentences: [
+      { index: 1, text: "The workflow starts idle." },
+      { index: 2, text: "When start occurs, it becomes done." },
+    ],
+  }));
+
+  test("recomputes holes server-side, limits the model input, and drops machine id collisions", async () => {
+    const transport = queuedTransport(output(validRankOutput()));
+    const response = await createLlmHandler({ transport })(rankRequest());
+
+    expect(response.status).toBe(200);
+    expect(await json(response)).toEqual({
+      kind: "rank",
+      rankedHoles: validRankOutput().rankedHoles,
+      suggestedEvents: [validRankOutput().suggestedEvents[0]],
+      truncated: false,
+      droppedSuggestions: 1,
+    });
+    expect(transport.create).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(transport.create).mock.calls[0][0].input.at(-1)?.content).toContain(
+      '"stateId":"idle"',
+    );
+  });
+
+  test.each([
+    [100, false],
+    [101, true],
+  ])("sets truncation at the %i hole boundary", async (holeCount, truncated) => {
+    const events = Array.from({ length: 26 }, (_, index) => ({
+      id: `event_${index}`,
+      name: `Event ${index}`,
+      surfaceForms: [`event ${index}`],
+      evidence: [1],
+    }));
+    const machine: Machine = {
+      states: Array.from({ length: 4 }, (_, index) => ({
+        id: `state_${index}`,
+        name: `State ${index}`,
+        isInitial: index === 0,
+        isFinal: false,
+        evidence: [1],
+      })),
+      events,
+      transitions: Array.from({ length: 104 - holeCount }, (_, index) => ({
+        from: "state_0",
+        event: events[index].id,
+        to: "state_0",
+        evidence: [1],
+      })),
+    };
+    const transport = queuedTransport(output({ rankedHoles: [], suggestedEvents: [] }));
+    const response = await createLlmHandler({ transport })(rankRequest(machine));
+
+    expect(response.status).toBe(200);
+    expect(await json(response)).toMatchObject({ kind: "rank", truncated });
+    const modelInput = vi.mocked(transport.create).mock.calls[0][0].input.at(-1)?.content;
+    const sentHoles = JSON.parse(
+      modelInput?.match(/BEGIN STRUCTURAL MISSING TRANSITIONS\n(.+)\nEND/s)?.[1] ?? "[]",
+    ) as unknown[];
+    expect(sentHoles).toHaveLength(100);
+  });
+
+  test("rejects an invalid machine before a rank model call", async () => {
+    const invalid = validRankMachine();
+    invalid.transitions[0] = { ...invalid.transitions[0], to: "ghost" };
+    const transport = queuedTransport(output(validRankOutput()));
+    const response = await createLlmHandler({ transport })(rankRequest(invalid));
+
+    expect(response.status).toBe(400);
+    expect(await json(response)).toMatchObject({ code: "bad_request", retryable: false });
+    expect(transport.create).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["refusal", { kind: "refusal" as const }, 422, "model_refusal"],
+    ["structural output", { kind: "output" as const, outputText: "not json" }, 502, "model_invalid"],
+    ["transport", new Error("network down"), 503, "upstream_failure"],
+  ])("maps rank $0 to the prescribed error", async (_label, result, status, code) => {
+    const transport = queuedTransport(result);
+    const response = await createLlmHandler({ transport })(rankRequest());
+
+    expect(response.status).toBe(status);
+    expect(await json(response)).toMatchObject({ code });
+  });
+
+  test("repairs rank semantic failures but keeps structural failures terminal", async () => {
+    const invalid = validRankOutput();
+    invalid.rankedHoles[0].rationale = " \n";
+    const transport = queuedTransport(output(invalid), output(validRankOutput()));
+    const response = await createLlmHandler({ transport })(rankRequest());
+
+    expect(response.status).toBe(200);
+    expect(transport.create).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(transport.create).mock.calls[1][0].input).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: expect.stringMatching(/bad_rationale/) }),
+      ]),
+    );
+  });
+
+  test("returns model_invalid after three rank semantic failures", async () => {
+    const invalid = validRankOutput();
+    invalid.suggestedEvents[0].confidence = 1.1;
+    const transport = queuedTransport(output(invalid), output(invalid), output(invalid));
+    const response = await createLlmHandler({ transport })(rankRequest());
+
+    expect(response.status).toBe(502);
+    expect(await json(response)).toMatchObject({ code: "model_invalid", retryable: true });
+    expect(transport.create).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe("terminal model failures", () => {
   test("maps a refusal to 422 without repair", async () => {
     const transport = queuedTransport({ kind: "refusal" });
@@ -474,7 +629,7 @@ describe("one shared per-IP rate limiter", () => {
         : rankEnvelope();
       await handler(request(JSON.stringify(body), { headers }));
     }
-    expect(transport.create).toHaveBeenCalledTimes(5);
+    expect(transport.create).toHaveBeenCalledTimes(10);
 
     const response = await handler(
       request(JSON.stringify({ op: "extract", spec: SPEC }), { headers }),
@@ -485,7 +640,7 @@ describe("one shared per-IP rate limiter", () => {
       message: expect.any(String),
       retryable: true,
     });
-    expect(transport.create).toHaveBeenCalledTimes(5);
+    expect(transport.create).toHaveBeenCalledTimes(10);
   });
 
   test("prunes expired minute buckets", async () => {

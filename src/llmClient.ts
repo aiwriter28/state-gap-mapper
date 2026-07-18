@@ -7,17 +7,36 @@ import {
 import {
   DOMAIN_LIMITS,
   type Machine,
+  type RankedHole,
   type Sentence,
+  type SuggestedEvent,
 } from "../lib/machine";
-import { decodeExtractionOutput, type DecodeErr } from "../lib/decode";
-import { validateExtraction, validateMachineShape } from "../lib/validate";
+import {
+  decodeExtractionOutput,
+  decodeRankOutput,
+  type DecodeErr,
+} from "../lib/decode";
+import {
+  validateExtraction,
+  validateMachineShape,
+  validateRankOutput,
+} from "../lib/validate";
 
 export type ExtractionResponse =
   | { kind: "machine"; machine: Machine; sentences: Sentence[] }
   | { kind: "not_spec"; reason: string; sentences: Sentence[] };
 
+export interface RankResponse {
+  kind: "rank";
+  rankedHoles: RankedHole[];
+  suggestedEvents: SuggestedEvent[];
+  truncated: boolean;
+  droppedSuggestions: number;
+}
+
 export interface LlmClient {
   extract(spec: string): Promise<ExtractionResponse>;
+  rank(machine: Machine, sentences: Sentence[]): Promise<RankResponse>;
 }
 
 type FetchLike = (
@@ -80,7 +99,7 @@ function decodeSentences(value: unknown): Sentence[] | null {
   return decoded;
 }
 
-function decodeSuccess(value: unknown): ExtractionResponse | null {
+function decodeSuccess(value: unknown): ExtractionResponse | RankResponse | null {
   if (!isRecord(value) || typeof value.kind !== "string") return null;
   if (value.kind === "not_spec") {
     if (!hasExactKeys(value, ["kind", "reason", "sentences"])) return null;
@@ -109,6 +128,41 @@ function decodeSuccess(value: unknown): ExtractionResponse | null {
       return null;
     }
     return { kind: "machine", machine: decoded.machine, sentences };
+  }
+
+  if (value.kind === "rank") {
+    if (!hasExactKeys(value, [
+      "kind",
+      "rankedHoles",
+      "suggestedEvents",
+      "truncated",
+      "droppedSuggestions",
+    ])) {
+      return null;
+    }
+    const droppedSuggestions = value.droppedSuggestions;
+    const decoded = decodeRankOutput({
+      rankedHoles: value.rankedHoles,
+      suggestedEvents: value.suggestedEvents,
+    });
+    if (
+      isDecodeError(decoded) ||
+      validateRankOutput(decoded).length > 0 ||
+      typeof value.truncated !== "boolean" ||
+      typeof droppedSuggestions !== "number" ||
+      !Number.isInteger(droppedSuggestions) ||
+      droppedSuggestions < 0 ||
+      droppedSuggestions > DOMAIN_LIMITS.suggestions
+    ) {
+      return null;
+    }
+    return {
+      kind: "rank",
+      rankedHoles: decoded.rankedHoles,
+      suggestedEvents: decoded.suggestedEvents,
+      truncated: value.truncated,
+      droppedSuggestions,
+    };
   }
 
   return null;
@@ -168,7 +222,35 @@ export function createLlmClient(fetcher: FetchLike = fetch): LlmClient {
       }
 
       const decoded = decodeSuccess(body);
-      if (decoded === null) throw INVALID_RESPONSE_ERROR;
+      if (decoded === null || decoded.kind === "rank") throw INVALID_RESPONSE_ERROR;
+      return decoded;
+    },
+
+    async rank(machine, sentences) {
+      let response: Response;
+      try {
+        response = await fetcher("/api/llm", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ op: "rank", machine, sentences }),
+        });
+      } catch {
+        throw NETWORK_ERROR;
+      }
+
+      let body: unknown;
+      try {
+        body = parseJson(await response.text());
+      } catch {
+        throw INVALID_RESPONSE_ERROR;
+      }
+
+      if (!response.ok) {
+        throw decodeApiError(body) ?? INVALID_RESPONSE_ERROR;
+      }
+
+      const decoded = decodeSuccess(body);
+      if (decoded === null || decoded.kind !== "rank") throw INVALID_RESPONSE_ERROR;
       return decoded;
     },
   };

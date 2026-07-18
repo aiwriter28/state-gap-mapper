@@ -2,6 +2,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 
 import { apiError, type ApiError } from "../lib/errors";
 import { computeGaps } from "../lib/gaps";
+import { mergeRanks } from "../lib/rankMerge";
 import {
   holeEvidence,
   type DisplayHole,
@@ -17,9 +18,10 @@ import {
   normalizeClientError,
   type ExtractionResponse,
   type LlmClient,
+  type RankResponse,
 } from "./llmClient";
 
-export type { ExtractionResponse, LlmClient } from "./llmClient";
+export type { ExtractionResponse, LlmClient, RankResponse } from "./llmClient";
 
 export type ExtractionPhase = "idle" | "extracting";
 
@@ -47,6 +49,8 @@ export interface AppState {
   viabilityRefusal: string | null;
   phase: ExtractionPhase;
   error: ApiError | null;
+  rankError: ApiError | null;
+  rankPending: boolean;
   sessionSeq: number;
   rankSeq: number;
   machineRev: number;
@@ -58,6 +62,8 @@ export interface AppActions {
   selectSample(spec: string): void;
   extract(): Promise<void>;
   applyExtraction(payload: ExtractionResponse, seq: number, submittedSpec?: string): void;
+  rank(): Promise<void>;
+  applyRank(payload: RankResponse, sessionSeq: number, rankSeq: number, machineRev: number): void;
   selectHole(hole: MissingTransition | null): void;
 }
 
@@ -87,6 +93,8 @@ function initialState(): AppState {
     viabilityRefusal: null,
     phase: "idle",
     error: null,
+    rankError: null,
+    rankPending: false,
     sessionSeq: 0,
     rankSeq: 0,
     machineRev: 0,
@@ -96,6 +104,15 @@ function initialState(): AppState {
 
 function unrankedHoles(gaps: Gaps): DisplayHole[] {
   return gaps.missingTransitions.map((hole) => ({ ...hole, rank: null }));
+}
+
+function orderDisplayHoles(holes: DisplayHole[]): DisplayHole[] {
+  return [...holes].sort((left, right) => {
+    if (left.rank === null && right.rank !== null) return -1;
+    if (left.rank !== null && right.rank === null) return 1;
+    if (left.rank === null || right.rank === null) return 0;
+    return right.rank.relevance - left.rank.relevance;
+  });
 }
 
 function stateCreator(client: LlmClient) {
@@ -113,6 +130,8 @@ function stateCreator(client: LlmClient) {
         sessionSeq: state.sessionSeq + 1,
         phase: "idle",
         error: null,
+        rankError: null,
+        rankPending: false,
       }));
     },
 
@@ -140,6 +159,8 @@ function stateCreator(client: LlmClient) {
         highlightedEvidence: [],
         viabilityRefusal: null,
         error: null,
+        rankError: null,
+        rankPending: false,
         machineRev: state.machineRev + 1,
         dirty: false,
       }));
@@ -163,17 +184,97 @@ function stateCreator(client: LlmClient) {
       }
 
       const seq = get().sessionSeq + 1;
-      set({ sessionSeq: seq, phase: "extracting", error: null });
+      set({
+        sessionSeq: seq,
+        phase: "extracting",
+        error: null,
+        rankError: null,
+        rankPending: false,
+      });
       try {
         const payload = await client.extract(submittedSpec);
         if (seq !== get().sessionSeq) return;
         get().applyExtraction(payload, seq, submittedSpec);
+        if (get().sessionSeq === seq && get().machine !== null) {
+          void get().rank();
+        }
       } catch (error) {
         if (seq !== get().sessionSeq) return;
         set({ error: normalizeClientError(error) });
       } finally {
         if (seq === get().sessionSeq) set({ phase: "idle" });
       }
+    },
+
+    rank: async () => {
+      const snapshot = get();
+      if (snapshot.machine === null) return;
+
+      const sessionSeq = snapshot.sessionSeq;
+      const machineRev = snapshot.machineRev;
+      const rankSeq = snapshot.rankSeq + 1;
+      const machine = snapshot.machine;
+      const sentences = snapshot.sentences;
+      set({ rankSeq, rankPending: true, rankError: null });
+
+      try {
+        const payload = await client.rank(machine, sentences);
+        const current = get();
+        if (
+          current.sessionSeq !== sessionSeq ||
+          current.rankSeq !== rankSeq ||
+          current.machineRev !== machineRev
+        ) {
+          return;
+        }
+        get().applyRank(payload, sessionSeq, rankSeq, machineRev);
+      } catch (error) {
+        const current = get();
+        if (
+          current.sessionSeq !== sessionSeq ||
+          current.rankSeq !== rankSeq ||
+          current.machineRev !== machineRev
+        ) {
+          return;
+        }
+        set({ rankError: normalizeClientError(error) });
+      } finally {
+        const current = get();
+        if (
+          current.sessionSeq === sessionSeq &&
+          current.rankSeq === rankSeq &&
+          current.machineRev === machineRev
+        ) {
+          set({ rankPending: false });
+        }
+      }
+    },
+
+    applyRank: (payload, sessionSeq, rankSeq, machineRev) => {
+      const current = get();
+      if (
+        current.machine === null ||
+        current.sessionSeq !== sessionSeq ||
+        current.rankSeq !== rankSeq ||
+        current.machineRev !== machineRev
+      ) {
+        return;
+      }
+
+      const gaps = computeGaps(current.machine);
+      const displayHoles = orderDisplayHoles(mergeRanks(
+        gaps.missingTransitions,
+        payload.rankedHoles,
+        new Set(current.machine.states.map((state) => state.id)),
+      ));
+      set({
+        gaps,
+        ranks: displayHoles.flatMap((hole) => hole.rank === null ? [] : [hole.rank]),
+        suggestedEvents: payload.suggestedEvents,
+        displayHoles,
+        rankTruncated: payload.truncated,
+        rankError: null,
+      });
     },
 
     selectHole: (hole) => {

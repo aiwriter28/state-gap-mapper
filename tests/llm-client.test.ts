@@ -72,6 +72,58 @@ describe("llmClient unknown boundary", () => {
     });
   });
 
+  test("returns only the exact strictly decoded rank DTO", async () => {
+    const rankedHoles = [{
+      stateId: "processing",
+      eventId: "cancel",
+      relevance: 0.92,
+      rationale: "Cancellation is handled elsewhere in this workflow.",
+      suggestedTargetStateId: "cancelled",
+    }];
+    const suggestedEvents = [{
+      id: "timeout",
+      name: "Timeout",
+      surfaceForms: ["times out"],
+      rationale: "A payment attempt can time out.",
+      confidence: 0.7,
+    }];
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      kind: "rank",
+      rankedHoles,
+      suggestedEvents,
+      truncated: false,
+      droppedSuggestions: 0,
+    }), { status: 200 }));
+
+    await expect(createLlmClient(fetcher).rank(machine, sentences)).resolves.toEqual({
+      kind: "rank",
+      rankedHoles,
+      suggestedEvents,
+      truncated: false,
+      droppedSuggestions: 0,
+    });
+    expect(fetcher).toHaveBeenCalledWith("/api/llm", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ op: "rank", machine, sentences }),
+    });
+  });
+
+  test("rejects unknown rank DTO fields at the client boundary", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      kind: "rank",
+      rankedHoles: [],
+      suggestedEvents: [],
+      truncated: false,
+      droppedSuggestions: 0,
+      trusted: true,
+    }), { status: 200 }));
+
+    await expect(createLlmClient(fetcher).rank(machine, sentences)).rejects.toEqual(
+      apiError("upstream_failure", "The model service returned an invalid response."),
+    );
+  });
+
   test.each([
     ["malformed JSON", "not json"],
     ["HTML", "<!doctype html><title>proxy failure</title>"],

@@ -5,7 +5,12 @@ import { describe, expect, test, vi } from "vitest";
 import { apiError } from "../lib/errors";
 import type { Machine } from "../lib/machine";
 import { splitSpec } from "../lib/sentences";
-import { createAppStore, type ExtractionResponse, type LlmClient } from "../src/store";
+import {
+  createAppStore,
+  type ExtractionResponse,
+  type LlmClient,
+  type RankResponse,
+} from "../src/store";
 import fixture from "./fixtures/order-checkout.machine.json";
 
 const orderMachine = fixture as Machine;
@@ -33,8 +38,29 @@ function fakeClient(...requests: Array<ReturnType<typeof deferred<ExtractionResp
       if (request === undefined) throw new Error("No deferred request queued.");
       return request.promise;
     }),
+    rank: vi.fn(() => new Promise<RankResponse>(() => undefined)),
   };
 }
+
+const rankResponse: RankResponse = {
+  kind: "rank",
+  rankedHoles: [{
+    stateId: "processing",
+    eventId: "cancel",
+    relevance: 0.95,
+    rationale: "Cancellation is already defined from Cart and needs a path here.",
+    suggestedTargetStateId: "cancelled",
+  }],
+  suggestedEvents: [{
+    id: "timeout",
+    name: "Timeout",
+    surfaceForms: ["times out"],
+    rationale: "A payment attempt can time out.",
+    confidence: 0.7,
+  }],
+  truncated: false,
+  droppedSuggestions: 0,
+};
 
 describe("extraction store", () => {
   test("applyExtraction turns the literal Sample 1 fixture into ten display holes", () => {
@@ -307,5 +333,114 @@ describe("extraction store", () => {
       phase: "idle",
       sessionSeq: 2,
     });
+  });
+});
+
+describe("deferred rank store", () => {
+  test("renders extracted graph and Structural Gaps before deferred rank, then applies rank metadata", async () => {
+    const extraction = deferred<ExtractionResponse>();
+    const ranking = deferred<RankResponse>();
+    const client: LlmClient = {
+      extract: vi.fn(() => extraction.promise),
+      rank: vi.fn(() => ranking.promise),
+    };
+    const store = createAppStore(client);
+    store.getState().setDraftSpec(orderSpec);
+
+    const submitted = store.getState().extract();
+    extraction.resolve(orderResponse);
+    await submitted;
+
+    expect(store.getState().machine).toEqual(orderMachine);
+    expect(store.getState().displayHoles).toHaveLength(10);
+    expect(store.getState().displayHoles.every((hole) => hole.rank === null)).toBe(true);
+    expect(client.rank).toHaveBeenCalledWith(orderMachine, orderResponse.sentences);
+
+    ranking.resolve(rankResponse);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.getState()).toMatchObject({
+      rankTruncated: false,
+      suggestedEvents: rankResponse.suggestedEvents,
+      rankError: null,
+    });
+    expect(store.getState().displayHoles.find(
+      (hole) => hole.stateId === "processing" && hole.eventId === "cancel",
+    )?.rank).toEqual(rankResponse.rankedHoles[0]);
+  });
+
+  test("rank failure keeps Structural Gaps visible and unranked with a rank-only error", async () => {
+    const extraction = deferred<ExtractionResponse>();
+    const ranking = deferred<RankResponse>();
+    const store = createAppStore({
+      extract: vi.fn(() => extraction.promise),
+      rank: vi.fn(() => ranking.promise),
+    });
+    store.getState().setDraftSpec(orderSpec);
+
+    const submitted = store.getState().extract();
+    extraction.resolve(orderResponse);
+    await submitted;
+    ranking.reject(apiError("upstream_failure", "The model service is temporarily unavailable."));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.getState().displayHoles).toHaveLength(10);
+    expect(store.getState().displayHoles.every((hole) => hole.rank === null)).toBe(true);
+    expect(store.getState().rankError).toEqual(
+      apiError("upstream_failure", "The model service is temporarily unavailable."),
+    );
+    expect(store.getState().error).toBeNull();
+  });
+
+  test("rank after a newer extraction is discarded", async () => {
+    const extractionA = deferred<ExtractionResponse>();
+    const extractionB = deferred<ExtractionResponse>();
+    const rankA = deferred<RankResponse>();
+    const rankB = deferred<RankResponse>();
+    let extractionIndex = 0;
+    let rankIndex = 0;
+    const store = createAppStore({
+      extract: vi.fn(() => {
+        const next = [extractionA, extractionB][extractionIndex];
+        extractionIndex += 1;
+        return next?.promise ?? Promise.reject(new Error("Unexpected extraction."));
+      }),
+      rank: vi.fn(() => {
+        const next = [rankA, rankB][rankIndex];
+        rankIndex += 1;
+        return next?.promise ?? Promise.reject(new Error("Unexpected rank."));
+      }),
+    });
+
+    store.getState().setDraftSpec("Spec A");
+    const a = store.getState().extract();
+    extractionA.resolve(orderResponse);
+    await a;
+    store.getState().setDraftSpec("Spec B");
+    const b = store.getState().extract();
+    extractionB.resolve(orderResponse);
+    await b;
+
+    rankA.resolve(rankResponse);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.getState().ranks).toEqual([]);
+    expect(store.getState().suggestedEvents).toEqual([]);
+  });
+
+  test("machine revision guard discards rank metadata after an edit", () => {
+    const store = createAppStore(fakeClient());
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec, rankSeq: 3 });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+    const machineRevBeforeEdit = store.getState().machineRev;
+    store.setState({ machineRev: machineRevBeforeEdit + 1 });
+
+    store.getState().applyRank(rankResponse, 1, 3, machineRevBeforeEdit);
+
+    expect(store.getState().ranks).toEqual([]);
+    expect(store.getState().displayHoles.every((hole) => hole.rank === null)).toBe(true);
   });
 });

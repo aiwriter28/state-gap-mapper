@@ -4,12 +4,34 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 
 import { createRequestBudget, type RequestBudget } from "../lib/budget";
-import { decodeExtractionOutput, decodeOpEnvelope, type DecodeErr } from "../lib/decode";
+import {
+  decodeExtractionOutput,
+  decodeOpEnvelope,
+  decodeRankOutput,
+  type DecodeErr,
+} from "../lib/decode";
 import { apiError, type ApiErrorCode } from "../lib/errors";
-import type { ExtractionOutput, OpEnvelope, Sentence } from "../lib/machine";
-import { EXTRACTION_DEVELOPER_PROMPT, EXTRACTION_SCHEMA } from "../lib/schemas";
+import { computeGaps } from "../lib/gaps";
+import type {
+  ExtractionOutput,
+  Machine,
+  OpEnvelope,
+  RankOutput,
+  Sentence,
+} from "../lib/machine";
+import {
+  EXTRACTION_DEVELOPER_PROMPT,
+  EXTRACTION_SCHEMA,
+  RANK_DEVELOPER_PROMPT,
+  RANK_SCHEMA,
+} from "../lib/schemas";
 import { splitSpec } from "../lib/sentences";
-import { validateExtraction, validateMachineShape, type VErr } from "../lib/validate";
+import {
+  validateExtraction,
+  validateMachineShape,
+  validateRankOutput,
+  type VErr,
+} from "../lib/validate";
 
 const MAX_RAW_BODY_BYTES = 64 * 1_024;
 const MAX_SPEC_CHARACTERS = 4_000;
@@ -28,6 +50,7 @@ const ERROR_MESSAGES = {
   rateLimited: "Too many requests. Try again in one minute.",
   modelRefusal: "The model declined to process this Spec.",
   modelInvalid: "The model could not produce a valid extraction.",
+  rankInvalid: "The model could not produce a valid ranking.",
   upstreamFailure: "The model service is temporarily unavailable.",
 } as const;
 
@@ -41,9 +64,9 @@ export interface ModelAttemptRequest {
   text: {
     format: {
       type: "json_schema";
-      name: "state_gap_extraction";
+      name: "state_gap_extraction" | "state_gap_rank";
       strict: true;
-      schema: typeof EXTRACTION_SCHEMA;
+      schema: typeof EXTRACTION_SCHEMA | typeof RANK_SCHEMA;
     };
   };
 }
@@ -243,6 +266,51 @@ function buildModelRequest(
   };
 }
 
+function buildRankModelRequest(
+  machine: Machine,
+  sentences: Sentence[],
+  holes: Array<{ stateId: string; eventId: string }>,
+  repairIssues: string[],
+): ModelAttemptRequest {
+  const input: ModelAttemptRequest["input"] = [
+    { role: "developer", content: RANK_DEVELOPER_PROMPT },
+  ];
+  if (repairIssues.length > 0) {
+    input.push({
+      role: "developer",
+      content: `The previous ranking failed semantic validation. Return a fresh complete ranking that fixes every issue below:\n${repairIssues.map((issue) => `- ${issue}`).join("\n")}`,
+    });
+  }
+  input.push({
+    role: "user",
+    content: [
+      "BEGIN MACHINE",
+      JSON.stringify(machine),
+      "END MACHINE",
+      "BEGIN NUMBERED SPEC",
+      numberedSpec(sentences),
+      "END NUMBERED SPEC",
+      "BEGIN STRUCTURAL MISSING TRANSITIONS",
+      JSON.stringify(holes),
+      "END STRUCTURAL MISSING TRANSITIONS",
+    ].join("\n"),
+  });
+
+  return {
+    model: "gpt-5.6",
+    store: false,
+    input,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "state_gap_rank",
+        strict: true,
+        schema: RANK_SCHEMA,
+      },
+    },
+  };
+}
+
 function semanticIssues(output: ExtractionOutput, sentenceCount: number): VErr[] {
   const issues: VErr[] = [];
   if (output.viability.isSpec && output.machine === null) {
@@ -288,6 +356,34 @@ function validateModelOutput(
   }
 
   const issues = semanticIssues(decoded, sentenceCount);
+  if (issues.length > 0) {
+    return {
+      kind: "semantic_failure",
+      issues: issues
+        .slice(0, 20)
+        .map((issue) => `${issue.code} at ${issue.subject}: ${issue.message}`),
+    };
+  }
+  return { kind: "valid", output: decoded };
+}
+
+type RankModelOutputValidation =
+  | { kind: "valid"; output: RankOutput }
+  | { kind: "structural_failure" }
+  | { kind: "semantic_failure"; issues: string[] };
+
+function validateRankModelOutput(outputText: string): RankModelOutputValidation {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(outputText) as unknown;
+  } catch {
+    return { kind: "structural_failure" };
+  }
+
+  const decoded = decodeRankOutput(parsed);
+  if (isDecodeError(decoded)) return { kind: "structural_failure" };
+
+  const issues = validateRankOutput(decoded);
   if (issues.length > 0) {
     return {
       kind: "semantic_failure",
@@ -405,15 +501,118 @@ async function extract(
   return errorResult(502, "model_invalid", ERROR_MESSAGES.modelInvalid);
 }
 
+function rankRequestIssues(machine: Machine, sentences: Sentence[]): VErr[] {
+  const issues = [
+    ...validateMachineShape(machine),
+    ...validateExtraction({
+      viability: { isSpec: true, reason: "Rank request machine." },
+      machine,
+    }, sentences.length),
+  ];
+  if (sentences.length === 0) {
+    issues.push({
+      code: "no_sentences",
+      subject: "sentences",
+      message: "A rank request requires numbered sentences.",
+    });
+  }
+  sentences.forEach((sentence, index) => {
+    if (sentence.text.trim().length === 0) {
+      issues.push({
+        code: "blank_sentence",
+        subject: `sentences[${index}].text`,
+        message: "Sentence text must not be blank.",
+      });
+    }
+  });
+  return issues;
+}
+
+function dropMachineIdCollisions(
+  suggestions: RankOutput["suggestedEvents"],
+  machine: Machine,
+): { suggestedEvents: RankOutput["suggestedEvents"]; droppedSuggestions: number } {
+  const machineIds = new Set([
+    ...machine.states.map((state) => state.id),
+    ...machine.events.map((event) => event.id),
+  ]);
+  const suggestedEvents = suggestions.filter((suggestion) => !machineIds.has(suggestion.id));
+  return {
+    suggestedEvents,
+    droppedSuggestions: suggestions.length - suggestedEvents.length,
+  };
+}
+
+async function rank(
+  machine: Machine,
+  sentences: Sentence[],
+  transport: ModelTransport,
+  budget: RequestBudget,
+): Promise<HttpResult> {
+  if (rankRequestIssues(machine, sentences).length > 0) {
+    return errorResult(400, "bad_request", ERROR_MESSAGES.badEnvelope);
+  }
+
+  const holes = computeGaps(machine).missingTransitions;
+  const rankableHoles = holes.slice(0, 100);
+  let semanticFailureCount = 0;
+  let repairIssues: string[] = [];
+
+  for (let attempt = 0; attempt < MAX_MODEL_ATTEMPTS; attempt += 1) {
+    const timeout = budget.nextAttemptTimeout();
+    if (timeout === null) {
+      return semanticFailureCount > 0
+        ? errorResult(502, "model_invalid", ERROR_MESSAGES.rankInvalid)
+        : upstreamFailure();
+    }
+
+    let modelResponse: ModelAttemptResponse;
+    try {
+      modelResponse = await transport.create(
+        buildRankModelRequest(machine, sentences, rankableHoles, repairIssues),
+        { timeout },
+      );
+    } catch {
+      return upstreamFailure();
+    }
+
+    if (modelResponse.kind === "refusal") {
+      return errorResult(422, "model_refusal", ERROR_MESSAGES.modelRefusal);
+    }
+
+    const validation = validateRankModelOutput(modelResponse.outputText);
+    if (validation.kind === "structural_failure") {
+      return errorResult(502, "model_invalid", ERROR_MESSAGES.rankInvalid);
+    }
+    if (validation.kind === "semantic_failure") {
+      semanticFailureCount += 1;
+      repairIssues = validation.issues;
+      continue;
+    }
+
+    const filtered = dropMachineIdCollisions(validation.output.suggestedEvents, machine);
+    return {
+      status: 200,
+      body: {
+        kind: "rank",
+        rankedHoles: validation.output.rankedHoles,
+        suggestedEvents: filtered.suggestedEvents,
+        truncated: holes.length > rankableHoles.length,
+        droppedSuggestions: filtered.droppedSuggestions,
+      },
+    };
+  }
+
+  return errorResult(502, "model_invalid", ERROR_MESSAGES.rankInvalid);
+}
+
 async function dispatch(
   envelope: OpEnvelope,
   transport: ModelTransport,
   budget: RequestBudget,
 ): Promise<HttpResult> {
   if (envelope.op === "extract") return extract(envelope.spec, transport, budget);
-
-  // The envelope and limiter are shared now; Task 6 adds rank model dispatch.
-  return upstreamFailure();
+  return rank(envelope.machine, envelope.sentences, transport, budget);
 }
 
 async function handleRequestSource(
