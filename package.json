@@ -1,0 +1,39 @@
+{
+  "name": "state-gap-mapper",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "npx vercel dev",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"api/**/*.ts\" \"lib/**/*.ts\" \"tests/**/*.ts\" vite.config.ts"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.11.2",
+    "dagre": "^0.8.5",
+    "openai": "^6.48.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/dagre": "^0.7.54",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vercel/node": "^5.8.26",
+    "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^10.7.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.64.0",
+    "vercel": "56.3.1",
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
+  }
+}
