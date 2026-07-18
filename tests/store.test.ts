@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from "vitest";
 import { apiError } from "../lib/errors";
 import { computeGaps } from "../lib/gaps";
 import { addTransition, deleteTransition } from "../lib/commands";
-import type { Machine } from "../lib/machine";
+import type { Machine, SuggestedEvent } from "../lib/machine";
 import { splitSpec } from "../lib/sentences";
 import {
   createAppStore,
@@ -177,7 +177,7 @@ describe("extraction store", () => {
         rationale: "Plausible.",
         confidence: 0.7,
       }],
-      stubs: [{ stateId: "processing", eventId: "cancel", targetStateId: null, evidence: [2, 5] }],
+      stubs: [{ stateId: "processing", eventId: "cancel", targetStateId: null, evidence: [2, 5], text: "" }],
       dismissedPairKeys: new Set(["paid\u0000cancel"]),
       selectedHoleKey: "processing\u0000cancel",
       highlightedEvidence: [2, 5],
@@ -251,7 +251,7 @@ describe("extraction store", () => {
         rationale: "Old.",
         confidence: 0.7,
       }],
-      stubs: [{ stateId: "old", eventId: "event", targetStateId: null, evidence: [1] }],
+      stubs: [{ stateId: "old", eventId: "event", targetStateId: null, evidence: [1], text: "" }],
       dismissedPairKeys: new Set(["old\u0000event"]),
       selectedHoleKey: "old\u0000event",
       highlightedEvidence: [1],
@@ -342,6 +342,100 @@ describe("extraction store", () => {
 });
 
 describe("editable machine store", () => {
+  test("accepts a flagship Missing Transition atomically and stores its Test Stub", () => {
+    const store = createAppStore(fakeClient());
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+
+    const result = store.getState().acceptHole(
+      { stateId: "processing", eventId: "cancel" },
+      { kind: "existing", stateId: "cancelled" },
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    expect(store.getState().displayHoles).not.toContainEqual(expect.objectContaining({
+      stateId: "processing", eventId: "cancel",
+    }));
+    expect(store.getState().stubs).toEqual([expect.objectContaining({
+      stateId: "processing",
+      eventId: "cancel",
+      targetStateId: "cancelled",
+      text: "# Evidence: sentences 2, 5\nGiven the system is in state Processing\nWhen Cancel occurs\nThen the system moves to Cancelled",
+    })]);
+  });
+
+  test("dismissal is session-scoped, survives a defined-then-reappearing pair, supports undo, and drops stale ids", () => {
+    const store = createAppStore(fakeClient());
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+    const hole = { stateId: "processing", eventId: "cancel" };
+
+    store.getState().dismissHole(hole);
+    expect(store.getState().displayHoles).not.toContainEqual(expect.objectContaining(hole));
+    store.getState().applyCommand(addTransition, {
+      from: "processing", to: "cancelled", event: { kind: "existing", id: "cancel" },
+    });
+    store.getState().applyCommand(deleteTransition, { from: "processing", eventId: "cancel" });
+    expect(store.getState().displayHoles).not.toContainEqual(expect.objectContaining(hole));
+
+    store.getState().undoDismiss(hole);
+    expect(store.getState().displayHoles).toContainEqual(expect.objectContaining(hole));
+    store.getState().dismissHole({ stateId: "paid", eventId: "cancel" });
+    store.getState().applyCommand((machine) => ({
+      ok: true,
+      machine: {
+        ...machine,
+        states: machine.states.filter((state) => state.id !== "paid"),
+        transitions: machine.transitions.filter((transition) => transition.from !== "paid" && transition.to !== "paid"),
+      },
+    }), undefined);
+    expect(store.getState().dismissedPairKeys).not.toContain("paid\u0000cancel");
+
+    store.setState({ sessionSeq: 2 });
+    store.getState().applyExtraction(orderResponse, 2, orderSpec);
+    expect(store.getState().dismissedPairKeys.size).toBe(0);
+  });
+
+  test("accepting an expiry Suggested Event adds exactly three new Missing Transitions and records provenance", () => {
+    const signupMachine: Machine = {
+      states: [
+        { id: "unverified", name: "Unverified", isInitial: true, isFinal: false, evidence: [1] },
+        { id: "active", name: "Active", isInitial: false, isFinal: false, evidence: [2] },
+        { id: "locked", name: "Locked", isInitial: false, isFinal: false, evidence: [3] },
+        { id: "deactivated", name: "Deactivated", isInitial: false, isFinal: true, evidence: [4] },
+      ],
+      events: [
+        { id: "code_correct", name: "Code correct", surfaceForms: ["correct code"], evidence: [1] },
+        { id: "code_incorrect_3x", name: "Code incorrect 3x", surfaceForms: ["incorrect code"], evidence: [2] },
+        { id: "unlock", name: "Unlock", surfaceForms: ["unlock"], evidence: [3] },
+        { id: "deactivate", name: "Deactivate", surfaceForms: ["deactivate"], evidence: [4] },
+      ],
+      transitions: [
+        { from: "unverified", event: "code_correct", to: "active", evidence: [1] },
+        { from: "unverified", event: "code_incorrect_3x", to: "locked", evidence: [2] },
+        { from: "active", event: "deactivate", to: "deactivated", evidence: [4] },
+        { from: "locked", event: "unlock", to: "unverified", evidence: [3] },
+      ],
+    };
+    const expiry: SuggestedEvent = {
+      id: "code_expired",
+      name: "Code expired",
+      surfaceForms: ["code expires"],
+      rationale: "Codes can expire.",
+      confidence: 0.8,
+    };
+    const store = createAppStore(fakeClient());
+    store.setState({ sessionSeq: 1, draftSpec: "Account signup" });
+    store.getState().applyExtraction({ kind: "machine", machine: signupMachine, sentences: [] }, 1, "Account signup");
+    store.setState({ suggestedEvents: [expiry] });
+    const before = store.getState().gaps.missingTransitions.length;
+
+    const result = store.getState().acceptSuggestedEvent(expiry);
+
+    expect(result).toMatchObject({ ok: true, acceptedEventId: "code_expired" });
+    expect(store.getState().gaps.missingTransitions).toHaveLength(before + 3);
+    expect(store.getState().acceptedSuggestedEventIds.get("code_expired")).toBe("code_expired");
+  });
   test("applies a validated command atomically, increments revision, refreshes gaps, and marks user edits dirty", () => {
     const store = createAppStore(fakeClient());
     store.setState({ sessionSeq: 1, draftSpec: orderSpec });

@@ -1,9 +1,31 @@
-import { DOMAIN_LIMITS, type Machine, type MachineEvent, type MachineState } from "./machine";
+import {
+  DOMAIN_LIMITS,
+  holeEvidence,
+  type Machine,
+  type MachineEvent,
+  type MachineState,
+  type MissingTransition,
+  type SuggestedEvent,
+} from "./machine";
+import { renderStub } from "./teststub";
 import { type VErr, validateMachineShape } from "./validate";
 
+export type CommandFailure = { ok: false; error: VErr };
 export type CommandResult =
   | { ok: true; machine: Machine }
-  | { ok: false; error: VErr };
+  | CommandFailure;
+
+export type HoleTarget =
+  | { kind: "existing"; stateId: string }
+  | { kind: "new"; name: string };
+
+export type AcceptHoleResult =
+  | { ok: true; machine: Machine; stub: string }
+  | CommandFailure;
+
+export type AcceptSuggestedEventResult =
+  | { ok: true; machine: Machine; acceptedEventId: string }
+  | CommandFailure;
 
 export interface AddStateArgs { name: string }
 export interface RenameArgs { id: string; name: string }
@@ -13,15 +35,15 @@ export interface DeleteTransitionArgs { from: string; eventId: string }
 export type TransitionEvent = { kind: "existing"; id: string } | { kind: "new"; name: string };
 export interface AddTransitionArgs { from: string; to: string; event: TransitionEvent }
 
-function err(code: string, subject: string, message: string): CommandResult {
+function err(code: string, subject: string, message: string): CommandFailure {
   return { ok: false, error: { code, subject, message } };
 }
 
-function unknown(subject: string): CommandResult {
+function unknown(subject: string): CommandFailure {
   return err("unknown_id", subject, "The selected state, event, or transition no longer exists.");
 }
 
-function blank(subject: string): CommandResult {
+function blank(subject: string): CommandFailure {
   return err("blank_name", subject, "Names must include at least one letter or number.");
 }
 
@@ -39,7 +61,7 @@ function success(candidate: Machine): CommandResult {
   return { ok: true, machine: candidate };
 }
 
-function normalizedName(name: string, subject: string): string | CommandResult {
+function normalizedName(name: string, subject: string): string | CommandFailure {
   const normalized = name.trim();
   if (normalized.length === 0) return blank(subject);
   if (normalized.length > DOMAIN_LIMITS.idOrName) {
@@ -57,7 +79,7 @@ export function slugify(name: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function uniqueSlug(name: string, existing: ReadonlySet<string>, subject: string): string | CommandResult {
+function uniqueSlug(name: string, existing: ReadonlySet<string>, subject: string): string | CommandFailure {
   const base = slugify(name);
   if (base.length === 0) return blank(subject);
   if (base.length > DOMAIN_LIMITS.idOrName) {
@@ -230,6 +252,83 @@ export function deleteTransition(machine: Machine, supplied: DeleteTransitionArg
   const candidate = cloned(machine);
   candidate.transitions = candidate.transitions.filter((transition) => transition.from !== args.from || transition.event !== args.eventId);
   return success(candidate);
+}
+
+export function acceptHole(
+  machine: Machine,
+  hole: MissingTransition,
+  target: HoleTarget,
+): AcceptHoleResult {
+  const source = machine.states.find((state) => state.id === hole.stateId);
+  const event = machine.events.find((candidate) => candidate.id === hole.eventId);
+  const alreadyDefined = machine.transitions.some((transition) => (
+    transition.from === hole.stateId && transition.event === hole.eventId
+  ));
+  if (source === undefined || event === undefined || source.isFinal || alreadyDefined) {
+    return unknown("hole");
+  }
+
+  let targetState: MachineState;
+  let candidateMachine = machine;
+  if (target.kind === "existing") {
+    const existing = machine.states.find((state) => state.id === target.stateId);
+    if (existing === undefined) return unknown("target.stateId");
+    targetState = existing;
+  } else {
+    const stateResult = addState(machine, { name: target.name });
+    if (!stateResult.ok) return stateResult;
+    candidateMachine = stateResult.machine;
+    targetState = candidateMachine.states.at(-1)!;
+  }
+
+  const transitionResult = addTransition(candidateMachine, {
+    from: hole.stateId,
+    to: targetState.id,
+    event: { kind: "existing", id: hole.eventId },
+  });
+  if (!transitionResult.ok) return transitionResult;
+
+  return {
+    ok: true,
+    machine: transitionResult.machine,
+    stub: renderStub({
+      stateName: source.name,
+      eventName: event.name,
+      targetName: targetState.name,
+      evidence: holeEvidence(machine, hole),
+    }),
+  };
+}
+
+export function acceptSuggestedEvent(
+  machine: Machine,
+  suggestion: SuggestedEvent,
+  accepted: ReadonlyMap<string, string>,
+): AcceptSuggestedEventResult {
+  const rememberedId = accepted.get(suggestion.id);
+  if (rememberedId !== undefined && machine.events.some((event) => event.id === rememberedId)) {
+    return { ok: true, machine, acceptedEventId: rememberedId };
+  }
+
+  const name = normalizedName(suggestion.name, "suggestedEvent.name");
+  if (typeof name !== "string") return name;
+  const existingIds = new Set(machine.events.map((event) => event.id));
+  const id = rememberedId !== undefined && !existingIds.has(rememberedId)
+    ? rememberedId
+    : uniqueSlug(suggestion.id, existingIds, "suggestedEvent.id");
+  if (typeof id !== "string") return id;
+
+  const candidate = cloned(machine);
+  candidate.events.push({
+    id,
+    name,
+    surfaceForms: [...suggestion.surfaceForms],
+    evidence: [],
+    userAdded: true,
+  });
+  const validation = validateMachineShape(candidate)[0];
+  if (validation !== undefined) return { ok: false, error: validation };
+  return { ok: true, machine: candidate, acceptedEventId: id };
 }
 
 export type MachineCommand =

@@ -1,7 +1,14 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import { apiError, type ApiError } from "../lib/errors";
-import { type CommandResult } from "../lib/commands";
+import {
+  acceptHole as acceptHoleCommand,
+  acceptSuggestedEvent as acceptSuggestedEventCommand,
+  type AcceptHoleResult,
+  type AcceptSuggestedEventResult,
+  type CommandResult,
+  type HoleTarget,
+} from "../lib/commands";
 import { computeGaps } from "../lib/gaps";
 import { mergeRanks } from "../lib/rankMerge";
 import {
@@ -32,6 +39,7 @@ export interface TestStub {
   eventId: string;
   targetStateId: string | null;
   evidence: number[];
+  text: string;
 }
 
 export interface AppState {
@@ -46,6 +54,7 @@ export interface AppState {
   rankTruncated: boolean;
   stubs: TestStub[];
   dismissedPairKeys: Set<string>;
+  acceptedSuggestedEventIds: Map<string, string>;
   selectedHoleKey: string | null;
   highlightedEvidence: number[];
   viabilityRefusal: string | null;
@@ -76,6 +85,10 @@ export interface AppActions {
   rank(): Promise<void>;
   applyRank(payload: RankResponse, sessionSeq: number, rankSeq: number, machineRev: number): void;
   selectHole(hole: MissingTransition | null): void;
+  acceptHole(hole: MissingTransition, target: HoleTarget): AcceptHoleResult;
+  acceptSuggestedEvent(suggestion: SuggestedEvent): AcceptSuggestedEventResult;
+  dismissHole(hole: MissingTransition): void;
+  undoDismiss(hole: MissingTransition): void;
   applyCommand<TArgs>(
     command: (machine: Machine, args: TArgs) => CommandResult,
     args: TArgs,
@@ -105,6 +118,7 @@ function initialState(): AppState {
     rankTruncated: false,
     stubs: [],
     dismissedPairKeys: new Set(),
+    acceptedSuggestedEventIds: new Map(),
     selectedHoleKey: null,
     highlightedEvidence: [],
     viabilityRefusal: null,
@@ -124,6 +138,32 @@ function initialState(): AppState {
 
 function unrankedHoles(gaps: Gaps): DisplayHole[] {
   return gaps.missingTransitions.map((hole) => ({ ...hole, rank: null }));
+}
+
+function pairKey(hole: MissingTransition): string {
+  return `${hole.stateId}\u0000${hole.eventId}`;
+}
+
+function pruneDismissedPairKeys(machine: Machine, dismissedPairKeys: ReadonlySet<string>): Set<string> {
+  const stateIds = new Set(machine.states.map((state) => state.id));
+  const eventIds = new Set(machine.events.map((event) => event.id));
+  return new Set([...dismissedPairKeys].filter((key) => {
+    const [stateId, eventId] = key.split("\u0000");
+    return stateIds.has(stateId) && eventIds.has(eventId);
+  }));
+}
+
+function visibleDisplayHoles(
+  machine: Machine,
+  gaps: Gaps,
+  ranks: RankedHole[],
+  dismissedPairKeys: ReadonlySet<string>,
+): DisplayHole[] {
+  return orderDisplayHoles(mergeRanks(
+    gaps.missingTransitions,
+    ranks,
+    new Set(machine.states.map((state) => state.id)),
+  )).filter((hole) => !dismissedPairKeys.has(pairKey(hole)));
 }
 
 function orderDisplayHoles(holes: DisplayHole[]): DisplayHole[] {
@@ -216,6 +256,7 @@ function stateCreator(client: LlmClient) {
         rankTruncated: false,
         stubs: [],
         dismissedPairKeys: new Set(),
+        acceptedSuggestedEventIds: new Map(),
         selectedHoleKey: null,
         highlightedEvidence: [],
         viabilityRefusal: null,
@@ -311,16 +352,19 @@ function stateCreator(client: LlmClient) {
 
       const revisionChanged = current.machineRev !== machineRev;
       const gaps = computeGaps(current.machine);
-      const displayHoles = orderDisplayHoles(mergeRanks(
-        gaps.missingTransitions,
+      const dismissedPairKeys = pruneDismissedPairKeys(current.machine, current.dismissedPairKeys);
+      const displayHoles = visibleDisplayHoles(
+        current.machine,
+        gaps,
         payload.rankedHoles,
-        new Set(current.machine.states.map((state) => state.id)),
-      ));
+        dismissedPairKeys,
+      );
       set({
         gaps,
         ranks: displayHoles.flatMap((hole) => hole.rank === null ? [] : [hole.rank]),
         suggestedEvents: revisionChanged ? [] : payload.suggestedEvents,
         displayHoles,
+        dismissedPairKeys,
         rankTruncated: revisionChanged ? false : payload.truncated,
         rankError: null,
       });
@@ -332,6 +376,114 @@ function stateCreator(client: LlmClient) {
         selectedHoleKey: hole === null ? null : `${hole.stateId}\u0000${hole.eventId}`,
         highlightedEvidence:
           hole === null || machine === null ? [] : holeEvidence(machine, hole),
+      });
+    },
+    acceptHole: (hole, target) => {
+      const current = get().machine;
+      if (current === null) {
+        const result: AcceptHoleResult = {
+          ok: false,
+          error: { code: "unknown_id", subject: "machine", message: "There is no machine to edit." },
+        };
+        set({ commandError: result.error });
+        return result;
+      }
+      const result = acceptHoleCommand(current, hole, target);
+      if (!result.ok) {
+        set({ commandError: result.error });
+        return result;
+      }
+      const targetStateId = result.machine.transitions.find((transition) => (
+        transition.from === hole.stateId && transition.event === hole.eventId
+      ))?.to ?? null;
+      const gaps = computeGaps(result.machine);
+      set((state) => {
+        const dismissedPairKeys = pruneDismissedPairKeys(result.machine, state.dismissedPairKeys);
+        const displayHoles = visibleDisplayHoles(result.machine, gaps, state.ranks, dismissedPairKeys);
+        const acceptedKey = pairKey(hole);
+        return {
+          machine: result.machine,
+          gaps,
+          ranks: displayHoles.flatMap((displayHole) => displayHole.rank === null ? [] : [displayHole.rank]),
+          displayHoles,
+          dismissedPairKeys,
+          stubs: [...state.stubs, {
+            stateId: hole.stateId,
+            eventId: hole.eventId,
+            targetStateId,
+            evidence: holeEvidence(current, hole),
+            text: result.stub,
+          }],
+          selectedHoleKey: state.selectedHoleKey === acceptedKey ? null : state.selectedHoleKey,
+          highlightedEvidence: state.selectedHoleKey === acceptedKey ? [] : state.highlightedEvidence,
+          machineRev: state.machineRev + 1,
+          dirty: true,
+          commandError: null,
+        };
+      });
+      return result;
+    },
+    acceptSuggestedEvent: (suggestion) => {
+      const current = get().machine;
+      if (current === null) {
+        const result: AcceptSuggestedEventResult = {
+          ok: false,
+          error: { code: "unknown_id", subject: "machine", message: "There is no machine to edit." },
+        };
+        set({ commandError: result.error });
+        return result;
+      }
+      const result = acceptSuggestedEventCommand(current, suggestion, get().acceptedSuggestedEventIds);
+      if (!result.ok) {
+        set({ commandError: result.error });
+        return result;
+      }
+      const changed = result.machine !== current;
+      const gaps = computeGaps(result.machine);
+      set((state) => {
+        const dismissedPairKeys = pruneDismissedPairKeys(result.machine, state.dismissedPairKeys);
+        const displayHoles = visibleDisplayHoles(result.machine, gaps, state.ranks, dismissedPairKeys);
+        const acceptedSuggestedEventIds = new Map(state.acceptedSuggestedEventIds);
+        acceptedSuggestedEventIds.set(suggestion.id, result.acceptedEventId);
+        return {
+          machine: result.machine,
+          gaps,
+          ranks: displayHoles.flatMap((displayHole) => displayHole.rank === null ? [] : [displayHole.rank]),
+          displayHoles,
+          dismissedPairKeys,
+          acceptedSuggestedEventIds,
+          suggestedEvents: state.suggestedEvents.filter((event) => event.id !== suggestion.id),
+          machineRev: state.machineRev + (changed ? 1 : 0),
+          dirty: state.dirty || changed,
+          commandError: null,
+        };
+      });
+      return result;
+    },
+    dismissHole: (hole) => {
+      const machine = get().machine;
+      if (machine === null) return;
+      set((state) => {
+        const dismissedPairKeys = pruneDismissedPairKeys(machine, state.dismissedPairKeys);
+        dismissedPairKeys.add(pairKey(hole));
+        return {
+          dismissedPairKeys,
+          displayHoles: visibleDisplayHoles(machine, state.gaps, state.ranks, dismissedPairKeys),
+          selectedHoleKey: state.selectedHoleKey === pairKey(hole) ? null : state.selectedHoleKey,
+          highlightedEvidence: state.selectedHoleKey === pairKey(hole) ? [] : state.highlightedEvidence,
+        };
+      });
+    },
+    undoDismiss: (hole) => {
+      const machine = get().machine;
+      if (machine === null) return;
+      set((state) => {
+        const dismissedPairKeys = pruneDismissedPairKeys(machine, state.dismissedPairKeys);
+        dismissedPairKeys.delete(pairKey(hole));
+        return {
+          dismissedPairKeys,
+          displayHoles: visibleDisplayHoles(machine, state.gaps, state.ranks, dismissedPairKeys),
+        };
       });
     },
     applyCommand: (command, args) => {
@@ -350,16 +502,14 @@ function stateCreator(client: LlmClient) {
         return result;
       }
       const gaps = computeGaps(result.machine);
-      const displayHoles = orderDisplayHoles(mergeRanks(
-        gaps.missingTransitions,
-        get().ranks,
-        new Set(result.machine.states.map((state) => state.id)),
-      ));
+      const dismissedPairKeys = pruneDismissedPairKeys(result.machine, get().dismissedPairKeys);
+      const displayHoles = visibleDisplayHoles(result.machine, gaps, get().ranks, dismissedPairKeys);
       set((state) => ({
         machine: result.machine,
         gaps,
         ranks: displayHoles.flatMap((hole) => hole.rank === null ? [] : [hole.rank]),
         displayHoles,
+        dismissedPairKeys,
         machineRev: state.machineRev + 1,
         dirty: true,
         commandError: null,

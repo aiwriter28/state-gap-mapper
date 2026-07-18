@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  acceptHole,
+  acceptSuggestedEvent,
   addState,
   addTransition,
   deleteState,
@@ -12,7 +14,7 @@ import {
   toggleFinal,
 } from "../lib/commands";
 import { computeGaps } from "../lib/gaps";
-import type { Machine } from "../lib/machine";
+import type { Machine, SuggestedEvent } from "../lib/machine";
 import fixture from "./fixtures/order-checkout.machine.json";
 
 const orderMachine = fixture as Machine;
@@ -34,6 +36,70 @@ function expectAtomicError(
 }
 
 describe("validated machine commands", () => {
+  test("accepts a live hole into a user edge and returns its exact Test Stub", () => {
+    const result = acceptHole(orderMachine, { stateId: "processing", eventId: "cancel" }, {
+      kind: "existing",
+      stateId: "cancelled",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      stub: "# Evidence: sentences 2, 5\nGiven the system is in state Processing\nWhen Cancel occurs\nThen the system moves to Cancelled",
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.machine.transitions).toContainEqual({
+      from: "processing", event: "cancel", to: "cancelled", evidence: [], userAdded: true,
+    });
+  });
+
+  test("rejects stale hole acceptance without changing the machine", () => {
+    const defined = resultMachine(addTransition(orderMachine, {
+      from: "processing", to: "cancelled", event: { kind: "existing", id: "cancel" },
+    }));
+    const before = structuredClone(defined);
+
+    expect(acceptHole(defined, { stateId: "processing", eventId: "cancel" }, {
+      kind: "existing",
+      stateId: "cancelled",
+    })).toMatchObject({ ok: false, error: { code: "unknown_id" } });
+    expect(defined).toEqual(before);
+  });
+
+  test("suggestion provenance preserves collision suffixes, no-ops, and recreates a deleted acceptance", () => {
+    const suggestion: SuggestedEvent = {
+      id: "code_expired",
+      name: "Code expired",
+      surfaceForms: ["code expires"],
+      rationale: "Codes can expire.",
+      confidence: 0.8,
+    };
+    const withCollision: Machine = {
+      ...orderMachine,
+      events: [...orderMachine.events, {
+        id: "code_expired", name: "Existing expiry", surfaceForms: ["expiry"], evidence: [1],
+      }],
+    };
+
+    const first = acceptSuggestedEvent(withCollision, suggestion, new Map());
+    expect(first).toMatchObject({ ok: true, acceptedEventId: "code_expired_2" });
+    if (!first.ok) throw new Error(first.error.message);
+    const accepted = new Map([[suggestion.id, first.acceptedEventId]]);
+
+    const second = acceptSuggestedEvent(first.machine, suggestion, accepted);
+    expect(second).toMatchObject({ ok: true, acceptedEventId: "code_expired_2" });
+    if (!second.ok) throw new Error(second.error.message);
+    expect(second.machine).toBe(first.machine);
+    expect(second.machine.events.map((event) => event.id)).not.toContain("code_expired_3");
+
+    const deleted = {
+      ...first.machine,
+      events: first.machine.events.filter((event) => event.id !== "code_expired_2"),
+    };
+    const recreated = acceptSuggestedEvent(deleted, suggestion, accepted);
+    expect(recreated).toMatchObject({ ok: true, acceptedEventId: "code_expired_2" });
+    if (!recreated.ok) throw new Error(recreated.error.message);
+    expect(recreated.machine.events.map((event) => event.id)).toContain("code_expired_2");
+  });
   test("adds slugified user state, suffixes collisions, and rejects blank or oversized names", () => {
     const added = addState(orderMachine, { name: "Awaiting Review" });
     const first = resultMachine(added);
