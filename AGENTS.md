@@ -23,6 +23,6 @@ same branch before handing off.
 
 ## Current snapshot
 
-Last updated on 2026-07-18: Tasks 1 through 11 are complete and review-clean on
-`feature/state-gap-mapper-build`; Task 12 is the next implementation task. Always confirm this
+Last updated on 2026-07-18: Tasks 1 through 12 are complete and review-clean on
+`feature/state-gap-mapper-build`; Task 13 is the next implementation task. Always confirm this
 against `.superpowers/sdd/progress.md` because the snapshot can become stale.
