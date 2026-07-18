@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "sentences": [
+    { "index": 1, "text": "A new order starts in the Cart state." },
+    { "index": 2, "text": "When the customer checks out, the order moves from Cart to Processing while payment is attempted." },
+    { "index": 3, "text": "If payment succeeds, the order moves from Processing to Paid." },
+    { "index": 4, "text": "If payment fails, the order returns from Processing to Cart so the customer can try again." },
+    { "index": 5, "text": "The customer can cancel the order from the Cart, which moves it to Cancelled." },
+    { "index": 6, "text": "Once a Paid order is handed to the courier, it moves to Shipped." }
+  ],
+  "machine": {
+    "states": [
+      { "id": "cart", "name": "Cart", "isInitial": true, "isFinal": false, "evidence": [1] },
+      { "id": "processing", "name": "Processing", "isInitial": false, "isFinal": false, "evidence": [2] },
+      { "id": "paid", "name": "Paid", "isInitial": false, "isFinal": false, "evidence": [3] },
+      { "id": "cancelled", "name": "Cancelled", "isInitial": false, "isFinal": true, "evidence": [5] },
+      { "id": "shipped", "name": "Shipped", "isInitial": false, "isFinal": true, "evidence": [6] }
+    ],
+    "events": [
+      { "id": "checkout", "name": "Checkout", "surfaceForms": ["checks out"], "evidence": [2] },
+      { "id": "payment_succeeded", "name": "Payment succeeded", "surfaceForms": ["payment succeeds"], "evidence": [3] },
+      { "id": "payment_failed", "name": "Payment failed", "surfaceForms": ["payment fails"], "evidence": [4] },
+      { "id": "cancel", "name": "Cancel", "surfaceForms": ["cancel"], "evidence": [5] },
+      { "id": "handed_to_courier", "name": "Handed to courier", "surfaceForms": ["handed to the courier"], "evidence": [6] }
+    ],
+    "transitions": [
+      { "from": "cart", "event": "checkout", "to": "processing", "evidence": [2] },
+      { "from": "processing", "event": "payment_succeeded", "to": "paid", "evidence": [3] },
+      { "from": "processing", "event": "payment_failed", "to": "cart", "evidence": [4] },
+      { "from": "cart", "event": "cancel", "to": "cancelled", "evidence": [5] },
+      { "from": "paid", "event": "handed_to_courier", "to": "shipped", "evidence": [6] }
+    ]
+  },
+  "rankedHoles": [
+    { "stateId": "cart", "eventId": "payment_succeeded", "relevance": 0.28, "rationale": "Payment has not started while an order is still in Cart.", "suggestedTargetStateId": "paid" },
+    { "stateId": "cart", "eventId": "payment_failed", "relevance": 0.34, "rationale": "A failure outcome may need an explicit no-op or recovery rule in Cart.", "suggestedTargetStateId": "cart" },
+    { "stateId": "cart", "eventId": "handed_to_courier", "relevance": 0.12, "rationale": "Courier handoff normally occurs only after payment.", "suggestedTargetStateId": "shipped" },
+    { "stateId": "processing", "eventId": "checkout", "relevance": 0.31, "rationale": "Repeated checkout during payment should have an explicit outcome.", "suggestedTargetStateId": "processing" },
+    { "stateId": "processing", "eventId": "cancel", "relevance": 0.98, "rationale": "Cancellation is defined from Cart but missing while payment is processing.", "suggestedTargetStateId": "cancelled" },
+    { "stateId": "processing", "eventId": "handed_to_courier", "relevance": 0.71, "rationale": "The workflow should prevent or define handoff before payment completes.", "suggestedTargetStateId": "shipped" },
+    { "stateId": "paid", "eventId": "checkout", "relevance": 0.22, "rationale": "Repeated checkout after payment should be defined even if it is ignored.", "suggestedTargetStateId": "paid" },
+    { "stateId": "paid", "eventId": "payment_succeeded", "relevance": 0.26, "rationale": "Duplicate payment success should have an idempotent outcome.", "suggestedTargetStateId": "paid" },
+    { "stateId": "paid", "eventId": "payment_failed", "relevance": 0.63, "rationale": "A late payment failure may require reversal or recovery behavior.", "suggestedTargetStateId": "cart" },
+    { "stateId": "paid", "eventId": "cancel", "relevance": 0.84, "rationale": "The spec should define whether a paid order can still be cancelled.", "suggestedTargetStateId": "cancelled" }
+  ],
+  "suggestedEvents": [
+    { "id": "refund_requested", "name": "Refund requested", "surfaceForms": ["requests a refund"], "rationale": "Paid orders often need an explicit refund path.", "confidence": 0.68 }
+  ],
+  "truncated": false,
+  "droppedSuggestions": 0
+}

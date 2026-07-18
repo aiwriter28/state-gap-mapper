@@ -2,17 +2,27 @@ import { useMemo, useState } from "react";
 import { useStore } from "zustand";
 
 import accountSpec from "../../samples/account-signup.txt?raw";
+import accountCacheData from "../../samples/cached/account-signup.json";
+import documentCacheData from "../../samples/cached/document-approval.json";
+import orderCacheData from "../../samples/cached/order-checkout.json";
 import documentSpec from "../../samples/document-approval.txt?raw";
 import orderSpec from "../../samples/order-checkout.txt?raw";
 import { uncoveredSentences } from "../../lib/selectors";
 import { SpecIcon } from "./Icons";
+import { decodeCachedSamplePayload } from "../llmClient";
 import { appStore } from "../store";
 
-const samples = [
-  { label: "order checkout", spec: orderSpec.trim() },
-  { label: "document approval", spec: documentSpec.trim() },
-  { label: "account signup", spec: accountSpec.trim() },
+const sampleInputs = [
+  { label: "order checkout", spec: orderSpec.trim(), cacheData: orderCacheData },
+  { label: "document approval", spec: documentSpec.trim(), cacheData: documentCacheData },
+  { label: "account signup", spec: accountSpec.trim(), cacheData: accountCacheData },
 ] as const;
+
+const samples = sampleInputs.map((sample) => ({
+  label: sample.label,
+  spec: sample.spec,
+  cache: decodeCachedSamplePayload(sample.cacheData, sample.spec),
+}));
 
 export function SpecPane() {
   const draftSpec = useStore(appStore, (state) => state.draftSpec);
@@ -53,9 +63,9 @@ export function SpecPane() {
     }
   };
 
-  const chooseSample = (spec: string) => {
-    selectSample(spec);
-    setEditing(true);
+  const chooseSample = (sample: (typeof samples)[number]) => {
+    selectSample(sample.spec, sample.cache ?? undefined);
+    setEditing(sample.cache === null);
   };
 
   return (
@@ -105,7 +115,7 @@ export function SpecPane() {
           ) : null}
           <div className="sample-chips" aria-label="Sample specs">
             {samples.map((sample) => (
-              <button className="chip" type="button" key={sample.label} onClick={() => chooseSample(sample.spec)}>
+              <button className="chip" type="button" key={sample.label} onClick={() => chooseSample(sample)}>
                 {sample.label}
               </button>
             ))}
@@ -137,7 +147,7 @@ export function SpecPane() {
             <div className="coverage">{sentences.length - uncovered.size} of {sentences.length} sentences mapped</div>
             <div className="sample-chips" aria-label="Sample specs">
               {samples.map((sample) => (
-                <button className="chip" type="button" key={sample.label} onClick={() => chooseSample(sample.spec)}>
+                <button className="chip" type="button" key={sample.label} onClick={() => chooseSample(sample)}>
                   {sample.label}
                 </button>
               ))}

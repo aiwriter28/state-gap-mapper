@@ -5,6 +5,7 @@ import {
   type ApiErrorCode,
 } from "../lib/errors";
 import {
+  type CachedSample,
   DOMAIN_LIMITS,
   type Machine,
   type RankedHole,
@@ -12,10 +13,13 @@ import {
   type SuggestedEvent,
 } from "../lib/machine";
 import {
+  decodeCachedSample,
   decodeExtractionOutput,
   decodeRankOutput,
   type DecodeErr,
 } from "../lib/decode";
+import { computeGaps } from "../lib/gaps";
+import { splitSpec } from "../lib/sentences";
 import {
   validateExtraction,
   validateMachineShape,
@@ -194,6 +198,50 @@ function parseJson(text: string): unknown | null {
 
 export function normalizeClientError(value: unknown): ApiError {
   return decodeApiError(value) ?? NETWORK_ERROR;
+}
+
+export function decodeCachedSamplePayload(value: unknown, spec?: string): CachedSample | null {
+  const decoded = decodeCachedSample(value);
+  if (isDecodeError(decoded)) return null;
+  if (validateMachineShape(decoded.machine).length > 0) return null;
+  if (validateExtraction({
+    viability: { isSpec: true, reason: "Validated cached sample." },
+    machine: decoded.machine,
+  }, decoded.sentences.length).length > 0) {
+    return null;
+  }
+  if (validateRankOutput({
+    rankedHoles: decoded.rankedHoles,
+    suggestedEvents: decoded.suggestedEvents,
+  }).length > 0) {
+    return null;
+  }
+  if (spec !== undefined && JSON.stringify(decoded.sentences) !== JSON.stringify(splitSpec(spec))) {
+    return null;
+  }
+
+  const authoritativePairs = new Set(computeGaps(decoded.machine).missingTransitions.map((hole) => (
+    `${hole.stateId}\u0000${hole.eventId}`
+  )));
+  const rankedPairs = new Set(decoded.rankedHoles.map((hole) => (
+    `${hole.stateId}\u0000${hole.eventId}`
+  )));
+  const stateIds = new Set(decoded.machine.states.map((state) => state.id));
+  if (
+    authoritativePairs.size !== decoded.rankedHoles.length ||
+    rankedPairs.size !== decoded.rankedHoles.length ||
+    authoritativePairs.size !== rankedPairs.size ||
+    [...authoritativePairs].some((pair) => !rankedPairs.has(pair)) ||
+    decoded.rankedHoles.some((hole) => (
+      hole.relevance < 0 ||
+      hole.relevance > 1 ||
+      (hole.suggestedTargetStateId !== null && !stateIds.has(hole.suggestedTargetStateId))
+    ))
+  ) {
+    return null;
+  }
+
+  return decoded;
 }
 
 export function createLlmClient(fetcher: FetchLike = fetch): LlmClient {

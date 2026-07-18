@@ -13,6 +13,7 @@ import { computeGaps } from "../lib/gaps";
 import { mergeRanks } from "../lib/rankMerge";
 import {
   holeEvidence,
+  type CachedSample,
   type DisplayHole,
   type Gaps,
   type Machine,
@@ -73,13 +74,13 @@ export interface AppState {
 
 type ReplacementIntent =
   | { kind: "extract"; spec: string }
-  | { kind: "sample"; spec: string };
+  | { kind: "sample"; spec: string; cache?: CachedSample };
 
 export const DIRTY_REPLACEMENT_COPY = "Extracting again will replace your edits. Continue?";
 
 export interface AppActions {
   setDraftSpec(spec: string): void;
-  selectSample(spec: string): void;
+  selectSample(spec: string, cache?: CachedSample): void;
   extract(): Promise<void>;
   applyExtraction(payload: ExtractionResponse, seq: number, submittedSpec?: string): void;
   rank(): Promise<void>;
@@ -195,6 +196,44 @@ function stateCreator(client: LlmClient) {
       }));
     };
 
+    const applyCachedSampleNow = (spec: string, cache: CachedSample) => {
+      const gaps = computeGaps(cache.machine);
+      const dismissedPairKeys = new Set<string>();
+      const displayHoles = visibleDisplayHoles(
+        cache.machine,
+        gaps,
+        cache.rankedHoles,
+        dismissedPairKeys,
+      );
+      set((state) => ({
+        draftSpec: spec,
+        activeSpec: spec,
+        sentences: cache.sentences,
+        machine: cache.machine,
+        gaps,
+        ranks: displayHoles.flatMap((hole) => hole.rank === null ? [] : [hole.rank]),
+        suggestedEvents: cache.suggestedEvents,
+        displayHoles,
+        rankTruncated: cache.truncated,
+        stubs: [],
+        dismissedPairKeys,
+        acceptedSuggestedEventIds: new Map(),
+        selectedHoleKey: null,
+        highlightedEvidence: [],
+        viabilityRefusal: null,
+        phase: "idle",
+        error: null,
+        rankError: null,
+        rankPending: false,
+        sessionSeq: state.sessionSeq + 1,
+        machineRev: state.machineRev + 1,
+        dirty: false,
+        commandError: null,
+        replacementConfirmation: null,
+        replacementIntent: null,
+      }));
+    };
+
     const runExtraction = async (submittedSpec: string) => {
       const seq = get().sessionSeq + 1;
       set({
@@ -226,12 +265,20 @@ function stateCreator(client: LlmClient) {
 
     setDraftSpec: (draftSpec) => set({ draftSpec }),
 
-    selectSample: (draftSpec) => {
+    selectSample: (draftSpec, cache) => {
       if (get().dirty) {
         set({
           replacementConfirmation: DIRTY_REPLACEMENT_COPY,
-          replacementIntent: { kind: "sample", spec: draftSpec },
+          replacementIntent: {
+            kind: "sample",
+            spec: draftSpec,
+            ...(cache === undefined ? {} : { cache }),
+          },
         });
+        return;
+      }
+      if (cache !== undefined) {
+        applyCachedSampleNow(draftSpec, cache);
         return;
       }
       selectSampleNow(draftSpec);
@@ -524,6 +571,10 @@ function stateCreator(client: LlmClient) {
       const intent = get().replacementIntent;
       if (intent === null) return;
       if (intent.kind === "sample") {
+        if (intent.cache !== undefined) {
+          applyCachedSampleNow(intent.spec, intent.cache);
+          return;
+        }
         set({
           draftSpec: intent.spec,
           replacementConfirmation: null,

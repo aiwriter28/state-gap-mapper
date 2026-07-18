@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from "vitest";
 import { apiError } from "../lib/errors";
 import { computeGaps } from "../lib/gaps";
 import { addTransition, deleteTransition } from "../lib/commands";
-import type { Machine, SuggestedEvent } from "../lib/machine";
+import type { CachedSample, Machine, SuggestedEvent } from "../lib/machine";
 import { splitSpec } from "../lib/sentences";
 import { selectActiveGapCount } from "../lib/selectors";
 import {
@@ -61,6 +61,25 @@ const rankResponse: RankResponse = {
     rationale: "A payment attempt can time out.",
     confidence: 0.7,
   }],
+  truncated: false,
+  droppedSuggestions: 0,
+};
+
+const orderCache: CachedSample = {
+  version: 1,
+  sentences: orderResponse.sentences,
+  machine: orderMachine,
+  rankedHoles: computeGaps(orderMachine).missingTransitions.map((hole) => (
+    hole.stateId === "processing" && hole.eventId === "cancel"
+      ? rankResponse.rankedHoles[0]
+      : {
+        ...hole,
+        relevance: 0.4,
+        rationale: "This authoritative hole has a cached rank.",
+        suggestedTargetStateId: "cart",
+      }
+  )),
+  suggestedEvents: rankResponse.suggestedEvents,
   truncated: false,
   droppedSuggestions: 0,
 };
@@ -340,6 +359,29 @@ describe("extraction store", () => {
       sessionSeq: 2,
     });
   });
+
+  test("selecting a validated cached sample hydrates the full pipeline instantly with zero API calls", () => {
+    const client = fakeClient();
+    const store = createAppStore(client);
+
+    store.getState().selectSample(orderSpec, orderCache);
+
+    expect(client.extract).not.toHaveBeenCalled();
+    expect(client.rank).not.toHaveBeenCalled();
+    expect(store.getState()).toMatchObject({
+      draftSpec: orderSpec,
+      activeSpec: orderSpec,
+      machine: orderMachine,
+      sentences: orderResponse.sentences,
+      suggestedEvents: rankResponse.suggestedEvents,
+      dirty: false,
+      phase: "idle",
+      rankPending: false,
+    });
+    expect(store.getState().displayHoles.find((hole) => (
+      hole.stateId === "processing" && hole.eventId === "cancel"
+    ))?.rank).toEqual(rankResponse.rankedHoles[0]);
+  });
 });
 
 describe("editable machine store", () => {
@@ -550,6 +592,33 @@ describe("editable machine store", () => {
       dirty: false,
       replacementConfirmation: null,
       machine: orderMachine,
+    });
+  });
+
+  test("dirty cached sample replacement hydrates only after confirmation and makes zero API calls", async () => {
+    const client = fakeClient();
+    const store = createAppStore(client);
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+    store.getState().applyCommand(addTransition, {
+      from: "processing",
+      to: "cancelled",
+      event: { kind: "existing", id: "cancel" },
+    });
+
+    store.getState().selectSample(orderSpec, orderCache);
+    expect(store.getState().dirty).toBe(true);
+    expect(store.getState().machine?.transitions).toHaveLength(6);
+
+    await store.getState().confirmReplacement();
+
+    expect(client.extract).not.toHaveBeenCalled();
+    expect(client.rank).not.toHaveBeenCalled();
+    expect(store.getState()).toMatchObject({
+      activeSpec: orderSpec,
+      machine: orderMachine,
+      dirty: false,
+      replacementConfirmation: null,
     });
   });
 

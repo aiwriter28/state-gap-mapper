@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "sentences": [
+    { "index": 1, "text": "When someone signs up, their account is created in the Unverified state." },
+    { "index": 2, "text": "We email a verification code, and when the user enters it correctly the account becomes Active." },
+    { "index": 3, "text": "If the code is entered incorrectly three times, the account moves to Locked." },
+    { "index": 4, "text": "A support agent can unlock a Locked account, returning it to Unverified." },
+    { "index": 5, "text": "An Active account can be deactivated by its owner, moving it to Deactivated." }
+  ],
+  "machine": {
+    "states": [
+      { "id": "unverified", "name": "Unverified", "isInitial": true, "isFinal": false, "evidence": [1] },
+      { "id": "active", "name": "Active", "isInitial": false, "isFinal": false, "evidence": [2] },
+      { "id": "locked", "name": "Locked", "isInitial": false, "isFinal": false, "evidence": [3] },
+      { "id": "deactivated", "name": "Deactivated", "isInitial": false, "isFinal": true, "evidence": [5] }
+    ],
+    "events": [
+      { "id": "code_correct", "name": "Code correct", "surfaceForms": ["enters it correctly"], "evidence": [2] },
+      { "id": "code_incorrect_3x", "name": "Code incorrect three times", "surfaceForms": ["entered incorrectly three times"], "evidence": [3] },
+      { "id": "unlock", "name": "Unlock", "surfaceForms": ["unlock"], "evidence": [4] },
+      { "id": "deactivate", "name": "Deactivate", "surfaceForms": ["deactivated"], "evidence": [5] }
+    ],
+    "transitions": [
+      { "from": "unverified", "event": "code_correct", "to": "active", "evidence": [2] },
+      { "from": "unverified", "event": "code_incorrect_3x", "to": "locked", "evidence": [3] },
+      { "from": "locked", "event": "unlock", "to": "unverified", "evidence": [4] },
+      { "from": "active", "event": "deactivate", "to": "deactivated", "evidence": [5] }
+    ]
+  },
+  "rankedHoles": [
+    { "stateId": "unverified", "eventId": "unlock", "relevance": 0.55, "rationale": "Unlocking an account that is not locked should have an explicit outcome.", "suggestedTargetStateId": "unverified" },
+    { "stateId": "unverified", "eventId": "deactivate", "relevance": 0.91, "rationale": "The spec should say whether an unverified account can be deactivated.", "suggestedTargetStateId": "deactivated" },
+    { "stateId": "active", "eventId": "code_correct", "relevance": 0.2, "rationale": "A verification code entered after activation may be safely ignored.", "suggestedTargetStateId": "active" },
+    { "stateId": "active", "eventId": "code_incorrect_3x", "relevance": 0.78, "rationale": "The spec should define whether failed verification attempts can lock an active account.", "suggestedTargetStateId": "locked" },
+    { "stateId": "active", "eventId": "unlock", "relevance": 0.32, "rationale": "Unlocking an already active account should have an idempotent outcome.", "suggestedTargetStateId": "active" },
+    { "stateId": "locked", "eventId": "code_correct", "relevance": 0.84, "rationale": "The spec should define whether a correct code can recover a locked account.", "suggestedTargetStateId": "active" },
+    { "stateId": "locked", "eventId": "code_incorrect_3x", "relevance": 0.26, "rationale": "Further incorrect entries while locked should have an explicit no-op outcome.", "suggestedTargetStateId": "locked" },
+    { "stateId": "locked", "eventId": "deactivate", "relevance": 0.72, "rationale": "Owners or support may need to deactivate a locked account.", "suggestedTargetStateId": "deactivated" }
+  ],
+  "suggestedEvents": [
+    { "id": "code_expired", "name": "Verification code expired", "surfaceForms": ["verification code expires"], "rationale": "Verification codes normally expire and require a new-code path.", "confidence": 0.94 }
+  ],
+  "truncated": false,
+  "droppedSuggestions": 0
+}

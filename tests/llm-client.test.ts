@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { apiError } from "../lib/errors";
-import type { Machine } from "../lib/machine";
-import { createLlmClient } from "../src/llmClient";
+import { computeGaps } from "../lib/gaps";
+import type { CachedSample, Machine } from "../lib/machine";
+import { createLlmClient, decodeCachedSamplePayload } from "../src/llmClient";
 import fixture from "./fixtures/order-checkout.machine.json";
 
 const machine = fixture as Machine;
@@ -30,9 +31,56 @@ const sentences = [
   },
 ];
 
+function cachedSampleFixture(): CachedSample {
+  return {
+    version: 1,
+    sentences,
+    machine,
+    rankedHoles: computeGaps(machine).missingTransitions.map((hole) => ({
+      ...hole,
+      relevance: 0.5,
+      rationale: "This authoritative hole has a cached rank.",
+      suggestedTargetStateId: "cart",
+    })),
+    suggestedEvents: [],
+    truncated: false,
+    droppedSuggestions: 0,
+  };
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("llmClient unknown boundary", () => {
+  test("decodes and semantically validates bundled cached sample data", () => {
+    const cache = cachedSampleFixture();
+
+    expect(decodeCachedSamplePayload(cache)).toEqual(cache);
+    expect(decodeCachedSamplePayload({
+      ...cache,
+      machine: {
+        ...machine,
+        states: machine.states.map((state) => ({ ...state, isInitial: false })),
+      },
+    })).toBeNull();
+  });
+
+  test("rejects incomplete ranks, unsafe scores and targets, and a cache for the wrong Spec", () => {
+    const cache = cachedSampleFixture();
+    expect(decodeCachedSamplePayload({
+      ...cache,
+      rankedHoles: cache.rankedHoles.slice(1),
+    })).toBeNull();
+    expect(decodeCachedSamplePayload({
+      ...cache,
+      rankedHoles: [{ ...cache.rankedHoles[0], relevance: 1.1 }, ...cache.rankedHoles.slice(1)],
+    })).toBeNull();
+    expect(decodeCachedSamplePayload({
+      ...cache,
+      rankedHoles: [{ ...cache.rankedHoles[0], suggestedTargetStateId: "ghost" }, ...cache.rankedHoles.slice(1)],
+    })).toBeNull();
+    expect(decodeCachedSamplePayload(cache, "A different Spec.")).toBeNull();
+  });
+
   test("returns a strictly decoded and semantically validated machine response", async () => {
     const fetcher = vi.fn(async () =>
       new Response(JSON.stringify({ kind: "machine", machine, sentences }), {

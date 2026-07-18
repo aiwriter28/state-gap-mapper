@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "cache:samples": "node scripts/cache-samples.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"api/**/*.ts\" \"lib/**/*.ts\" \"tests/**/*.ts\" vite.config.ts"

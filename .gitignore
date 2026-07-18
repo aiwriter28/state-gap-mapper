@@ -35,6 +35,7 @@ pnpm-debug.log*
 graphify-out/
 .worktrees/
 .superpowers/
+samples/.cache-stage-*/
 
 # OS / editor
 .DS_Store
