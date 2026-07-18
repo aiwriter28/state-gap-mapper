@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -19,23 +19,33 @@ vi.mock("@xyflow/react", async () => {
     Position: { Left: "left", Right: "right", Top: "top", Bottom: "bottom" },
     ReactFlow: ({
       nodes,
+      nodeTypes,
       onNodeDoubleClick,
     }: {
       nodes: Array<{ id: string; type?: string; data: { label?: string } }>;
+      nodeTypes?: Record<string, React.ComponentType<{ data: { label?: string } }>>;
       onNodeDoubleClick?: (event: React.MouseEvent, node: { id: string }) => void;
-    }) => React.createElement(
-      "div",
-      { "aria-label": "Editable state machine" },
-      nodes.filter((node) => node.type === "state").map((node) => React.createElement(
-        "button",
-        {
-          key: node.id,
-          type: "button",
-          onDoubleClick: (event: React.MouseEvent) => onNodeDoubleClick?.(event, node),
-        },
-        node.data.label,
-      )),
-    ),
+    }) => {
+      const ghost = nodes.find((node) => node.type === "ghost");
+      const GhostNode = nodeTypes?.ghost;
+      return React.createElement(
+        "div",
+        { "aria-label": "Editable state machine" },
+        nodes.filter((node) => node.type === "state").map((node) => React.createElement(
+          "button",
+          {
+            key: node.id,
+            type: "button",
+            onDoubleClick: (event: React.MouseEvent) => onNodeDoubleClick?.(event, node),
+          },
+          node.data.label,
+        )),
+        React.createElement("output", { "data-testid": "active-ghost" }, ghost?.id ?? "none"),
+        ghost !== undefined && GhostNode !== undefined
+          ? React.createElement(GhostNode, { data: ghost.data })
+          : null,
+      );
+    },
     getBezierPath: () => [""],
     getSmoothStepPath: () => ["", 0, 0],
   };
@@ -54,6 +64,23 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test("the canvas follows the selected gap and otherwise shows the highest-ranked visible gap", () => {
+  const displayHoles = appStore.getState().displayHoles;
+  const fallback = displayHoles.find((hole) => hole.stateId === "paid" && hole.eventId === "checkout");
+  expect(fallback).toBeDefined();
+  appStore.setState({
+    displayHoles: [fallback!, ...displayHoles.filter((hole) => hole !== fallback)],
+    selectedHoleKey: null,
+  });
+  render(<Canvas />);
+
+  expect(screen.getByTestId("active-ghost").textContent).toBe("ghost-paid-checkout");
+
+  act(() => appStore.getState().selectHole({ stateId: "cart", eventId: "payment_succeeded" }));
+  expect(screen.getByTestId("active-ghost").textContent).toBe("ghost-cart-payment_succeeded");
+  expect(screen.getByText("Target state missing")).not.toBeNull();
+});
 
 test("double-clicking a Sample 1 node opens rename with its full name focused and selected", async () => {
   const user = userEvent.setup();

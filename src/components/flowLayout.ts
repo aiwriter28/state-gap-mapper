@@ -21,6 +21,7 @@ export interface MachineEdgeData extends Record<string, unknown> {
 }
 
 export interface GhostEdgeData extends Record<string, unknown> {
+  eventName: string;
   selected: boolean;
 }
 
@@ -37,9 +38,43 @@ export interface FlowElements {
 }
 
 const NODE_HEIGHT = 78;
+const GHOST_WIDTH = 158;
+const GHOST_HEIGHT = 70;
+const GHOST_ROW_OFFSET = 208;
+const GHOST_NODE_GAP = 48;
 
 function nodeWidth(label: string): number {
   return Math.max(136, Math.min(220, label.length * 11 + 58));
+}
+
+function eventName(machine: Machine, eventId: string): string {
+  return machine.events.find((event) => event.id === eventId)?.name ?? eventId;
+}
+
+function boxesOverlap(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+): boolean {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y;
+}
+
+function placeGhostNode(source: StateFlowNode, stateNodes: StateFlowNode[]): { x: number; y: number } {
+  const position = {
+    x: source.position.x + (nodeWidth(source.data.label) - GHOST_WIDTH) / 2,
+    y: source.position.y + GHOST_ROW_OFFSET,
+  };
+  for (let attempt = 0; attempt < stateNodes.length; attempt += 1) {
+    const collision = stateNodes.find((node) => boxesOverlap(
+      { ...position, width: GHOST_WIDTH, height: GHOST_HEIGHT },
+      { ...node.position, width: nodeWidth(node.data.label), height: NODE_HEIGHT },
+    ));
+    if (collision === undefined) break;
+    position.x = collision.position.x + nodeWidth(collision.data.label) + GHOST_NODE_GAP;
+  }
+  return position;
 }
 
 export function buildFlowElements(
@@ -110,7 +145,7 @@ export function buildFlowElements(
       sourceHandle: vertical || backward ? "bottom-source" : "right-source",
       targetHandle: vertical ? "top-target" : backward ? "bottom-target" : "left-target",
       data: {
-        label: machine.events.find((event) => event.id === transition.event)?.name ?? transition.event,
+        label: eventName(machine, transition.event),
         eventId: transition.event,
         userAdded: transition.userAdded === true,
       },
@@ -120,15 +155,16 @@ export function buildFlowElements(
   });
 
   if (ghostHole !== null) {
-    const source = nodes.find((node) => node.id === ghostHole.stateId);
+    const source = stateNodes.find((node) => node.id === ghostHole.stateId);
     if (source !== undefined) {
       const ghostId = `ghost-${ghostHole.stateId}-${ghostHole.eventId}`;
+      const ghostPosition = placeGhostNode(source, stateNodes);
       nodes.push({
         id: ghostId,
         type: "ghost",
-        position: { x: source.position.x + 310, y: source.position.y + 154 },
+        position: ghostPosition,
         data: { label: "???" },
-        style: { width: 112, height: 62 },
+        style: { width: GHOST_WIDTH, height: GHOST_HEIGHT },
         draggable: false,
         selectable: false,
       });
@@ -137,8 +173,10 @@ export function buildFlowElements(
         type: "ghost",
         source: ghostHole.stateId,
         target: ghostId,
-        sourceHandle: "right-source",
+        sourceHandle: "bottom-source",
+        targetHandle: "top-target",
         data: {
+          eventName: eventName(machine, ghostHole.eventId),
           selected: selectedHoleKey === `${ghostHole.stateId}\u0000${ghostHole.eventId}`,
         },
         markerEnd: { type: MarkerType.ArrowClosed, color: "#E8474F", width: 15, height: 15 },

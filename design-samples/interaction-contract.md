@@ -44,7 +44,7 @@ the new graph. Ranking metadata is optional decoration and cannot add, remove, o
 | Missing Transition list | Structural Gap cards | `displayHoles` from authoritative gaps + optional ranks |
 | Ranking deferred or failed | `Unranked` state, notice, `Re-rank` | Rank request; holes remain visible |
 | Unreachable / Dead-End | `Structural` state sections | Deterministic graph analysis |
-| Evidence selection | Flagship card highlights S2/S5 | `holeEvidence` and selected key |
+| Evidence and canvas selection | Flagship card highlights S2/S5; another selected card replaces the canvas ghost | `holeEvidence`, selected key, and first ranked visible fallback |
 | Accept with target picker | `Accept` dialog | `acceptHole` command |
 | Dismiss and restore | `Dismiss` / `Undo` | Session-scoped dismissed tuple set |
 | Suggested Event cascade | `Add event` | `acceptSuggestedEvent`, then synchronous gap recompute |

@@ -105,12 +105,14 @@ far right. `1px` `--panel` bottom border. Panes divided by `1px` `--panel` rules
 - **Drawn edge**: `1.5px` solid `--chalk` line with arrowhead; event label in a small outlined
   pill (`--blueprint` fill, `1px` `--faded` border, mono `--chalk` label). Labels: `checkout`,
   `payment_succeeded`, `payment_failed`, `cancel`, `handed_to_courier`.
-- **Redline ghost annotation (signature element):** the top-ranked Missing Transition renders
-  ON the canvas as a bold `--redline` **dashed** edge stub leaving the source node (`processing`,
-  right side), curving out to die into a `--redline` `???` tag. Hand-sketched pencil character.
+- **Redline ghost annotation (signature element):** the selected Missing Transition renders
+  ON the canvas; when no card is selected, the first ranked visible gap is the fallback. A bold
+  `--redline` edge leaves the source node, carries the missing event in a redline pill, and dies
+  into a `--redline` `???` tag captioned `TARGET STATE MISSING`. Hand-sketched pencil character.
   It is the single loudest element; nothing else competes.
-  - Default: slow pulse (see Motion).
-  - Selected (its card active): ghost goes solid `--redline`, evidence sentences light in Spec.
+  - Default fallback: dashed with a slow pulse (see Motion).
+  - Selected (its card active): the ghost switches to that pair, goes solid `--redline`, and its
+    evidence sentences light in Spec.
   - Accepted: converts in place to `--chalk` linework (see 5.5).
 - User-added elements carry no evidence and are labeled `added by you`.
 
@@ -140,7 +142,8 @@ section: a quiet `Show all 10 undefined pairs` link (`--faded`) opening the matr
 
 ### 5.5 Accept conversion (erase-the-ink) — see `crop-accept-beforeafter.png`
 The reward interaction, one continuous transition:
-- **Before:** `processing` node + `--redline` dashed arrow → `--redline` `???`.
+- **Before:** `processing` node + `cancel` redline pill + dashed arrow → `???` with
+  `TARGET STATE MISSING`.
 - **After:** `--redline` fully gone; a solid `--chalk` edge leaves `processing`, carries a
   `cancel` label pill, and lands on the `cancelled` node (double-outline final). The gap card
   leaves the list and the `Gaps (N)` count decrements.
@@ -180,7 +183,7 @@ is the entire success signal.
    recipe / lorem / code dump).
 3. **Mid-session (mocked, Sample 1)** — the locked screen: machine drawn, ghost pulsing, gaps
    ranked, one suggested event, one stub.
-4. **Gap selected** — ghost solid, evidence sentences lit.
+4. **Gap selected** — canvas ghost switches to that pair, goes solid, and evidence sentences light.
 5. **Gap accepted** — erase-the-ink conversion, count decremented, stub finalized.
 6. **Gap dismissed** — pair leaves list + count, stays in the full matrix (undoable).
 7. **Canvas edited** — re-run structural analysis instantly; new holes appear unranked at top of

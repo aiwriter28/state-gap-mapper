@@ -189,7 +189,10 @@ textarea:focus-visible,
 .event-pill { position: absolute; z-index: 2; border: 1px solid var(--faded); border-radius: 6px; padding: 6px 10px; background: var(--blueprint); color: var(--chalk); font-size: 0.68rem; line-height: 1; pointer-events: none; white-space: nowrap; }
 .ghost-edge { stroke: var(--redline); stroke-width: 5.5; stroke-dasharray: 14 10; stroke-linecap: round; fill: none; animation: ghost-pulse 2s ease-in-out infinite; filter: drop-shadow(0 0 5px rgba(232, 71, 79, 0.24)); }
 .ghost-edge.selected { stroke-dasharray: none; animation: none; }
-.ghost-node { display: grid; width: 100%; height: 100%; place-items: center; color: var(--redline); font-family: "Barlow", sans-serif; font-size: 2.35rem; font-weight: 600; letter-spacing: 0.04em; }
+.ghost-node { display: flex; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; color: var(--redline); }
+.ghost-symbol { font-family: "Barlow", sans-serif; font-size: 2.35rem; font-weight: 600; line-height: 0.9; letter-spacing: 0.04em; }
+.ghost-copy { margin-top: 6px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.52rem; font-weight: 600; line-height: 1; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.ghost-event-pill { position: absolute; z-index: 2; border: 1px solid var(--redline); border-radius: 6px; padding: 5px 8px; background: var(--blueprint); color: var(--redline); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.68rem; line-height: 1; pointer-events: none; white-space: nowrap; }
 
 .canvas-empty, .canvas-status { position: absolute; inset: 0; z-index: 4; display: grid; place-content: center; padding: 32px; text-align: center; }
 .canvas-empty strong, .canvas-empty span, .canvas-status strong, .canvas-status span { display: block; }

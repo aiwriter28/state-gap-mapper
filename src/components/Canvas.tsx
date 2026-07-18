@@ -10,6 +10,7 @@ import {
   type Connection,
   type EdgeProps,
   type NodeProps,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import { useStore } from "zustand";
 
@@ -28,6 +29,8 @@ import { CanvasIcon } from "./Icons";
 import { appStore } from "../store";
 import {
   buildFlowElements,
+  type FlowEdge,
+  type FlowNode,
   type GhostFlowEdge,
   type GhostFlowNode,
   type MachineFlowEdge,
@@ -51,9 +54,10 @@ function StateNode({ data }: NodeProps<StateFlowNode>) {
 
 function GhostNode({ data }: NodeProps<GhostFlowNode>) {
   return (
-    <div className="ghost-node" aria-label="Missing transition target unknown">
-      <Handle type="target" position={Position.Left} className="ghost-handle" />
-      {data.label}
+    <div className="ghost-node" aria-label="Target state missing">
+      <Handle id="top-target" type="target" position={Position.Top} className="ghost-handle" />
+      <span className="ghost-symbol" aria-hidden="true">{data.label}</span>
+      <span className="ghost-copy" aria-hidden="true">Target state missing</span>
     </div>
   );
 }
@@ -85,7 +89,7 @@ function MachineEdge(props: EdgeProps<MachineFlowEdge>) {
 }
 
 function GhostEdge(props: EdgeProps<GhostFlowEdge>) {
-  const [path] = getBezierPath({
+  const [path, labelX, labelY] = getBezierPath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     sourcePosition: props.sourcePosition,
@@ -95,21 +99,34 @@ function GhostEdge(props: EdgeProps<GhostFlowEdge>) {
     curvature: 0.36,
   });
   return (
-    <BaseEdge
-      id={props.id}
-      path={path}
-      markerEnd={props.markerEnd}
-      className={`ghost-edge${props.data?.selected ? " selected" : ""}`}
-    />
+    <>
+      <BaseEdge
+        id={props.id}
+        path={path}
+        markerEnd={props.markerEnd}
+        className={`ghost-edge${props.data?.selected ? " selected" : ""}`}
+      />
+      <EdgeLabelRenderer>
+        <div
+          className="ghost-event-pill nodrag nopan"
+          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+        >
+          {props.data?.eventName}
+        </div>
+      </EdgeLabelRenderer>
+    </>
   );
 }
 
 const nodeTypes = { state: StateNode, ghost: GhostNode };
 const edgeTypes = { machine: MachineEdge, ghost: GhostEdge };
+const fitViewOptions = { padding: 0.17, maxZoom: 1.12 };
 
-function flagshipHole(machine: Machine | null, holes: MissingTransition[]): MissingTransition | null {
-  if (machine === null || holes.length === 0) return null;
-  return holes.find((hole) => hole.stateId === "processing" && hole.eventId === "cancel") ?? holes[0];
+function activeGhostHole(
+  holes: MissingTransition[],
+  selectedHoleKey: string | null,
+): MissingTransition | null {
+  return holes.find((hole) => `${hole.stateId}\u0000${hole.eventId}` === selectedHoleKey) ?? holes[0] ?? null;
 }
 
 function firstOtherState(machine: Machine, stateId: string | null): string {
@@ -118,7 +135,7 @@ function firstOtherState(machine: Machine, stateId: string | null): string {
 
 export function Canvas() {
   const machine = useStore(appStore, (state) => state.machine);
-  const gaps = useStore(appStore, (state) => state.gaps);
+  const displayHoles = useStore(appStore, (state) => state.displayHoles);
   const selectedHoleKey = useStore(appStore, (state) => state.selectedHoleKey);
   const phase = useStore(appStore, (state) => state.phase);
   const error = useStore(appStore, (state) => state.error);
@@ -138,8 +155,9 @@ export function Canvas() {
   const [newEventName, setNewEventName] = useState("");
   const [focusStateName, setFocusStateName] = useState(false);
   const stateNameInputRef = useRef<HTMLInputElement>(null);
+  const flowInstanceRef = useRef<ReactFlowInstance<FlowNode, FlowEdge> | null>(null);
 
-  const ghostHole = flagshipHole(machine, gaps.missingTransitions);
+  const ghostHole = activeGhostHole(displayHoles, selectedHoleKey);
   const elements = useMemo(
     () => machine === null ? { nodes: [], edges: [] } : buildFlowElements(machine, ghostHole, selectedHoleKey),
     [ghostHole, machine, selectedHoleKey],
@@ -174,6 +192,11 @@ export function Canvas() {
     stateNameInputRef.current?.select();
     setFocusStateName(false);
   }, [focusStateName, inspectorOpen]);
+
+  useEffect(() => {
+    if (ghostHole === null) return;
+    void flowInstanceRef.current?.fitView(fitViewOptions);
+  }, [ghostHole]);
 
   const openInspector = (
     stateId: string | null = selectedStateId,
@@ -229,13 +252,14 @@ export function Canvas() {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
-            fitViewOptions={{ padding: 0.17, maxZoom: 1.12 }}
+            fitViewOptions={fitViewOptions}
             minZoom={0.35}
             maxZoom={1.5}
             nodesConnectable
             edgesReconnectable={false}
             elementsSelectable
             deleteKeyCode={["Backspace", "Delete"]}
+            onInit={(instance) => { flowInstanceRef.current = instance; }}
             onConnect={onConnect}
             onNodeDoubleClick={(_, node) => openInspector(node.id, true)}
             onEdgesDelete={(edges) => {
