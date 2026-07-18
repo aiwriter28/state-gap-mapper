@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import { apiError } from "../lib/errors";
 import { computeGaps } from "../lib/gaps";
+import { addTransition, deleteTransition } from "../lib/commands";
 import type { Machine } from "../lib/machine";
 import { splitSpec } from "../lib/sentences";
 import {
@@ -336,6 +337,99 @@ describe("extraction store", () => {
       viabilityRefusal: null,
       phase: "idle",
       sessionSeq: 2,
+    });
+  });
+});
+
+describe("editable machine store", () => {
+  test("applies a validated command atomically, increments revision, refreshes gaps, and marks user edits dirty", () => {
+    const store = createAppStore(fakeClient());
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+    const revision = store.getState().machineRev;
+
+    const result = store.getState().applyCommand(addTransition, {
+      from: "processing",
+      to: "cancelled",
+      event: { kind: "existing", id: "cancel" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(store.getState()).toMatchObject({ machineRev: revision + 1, dirty: true });
+    expect(store.getState().gaps.missingTransitions).not.toContainEqual({
+      stateId: "processing",
+      eventId: "cancel",
+    });
+    expect(store.getState().displayHoles.find(
+      (hole) => hole.stateId === "processing" && hole.eventId === "cancel",
+    )).toBeUndefined();
+
+    const machine = store.getState().machine;
+    const failed = store.getState().applyCommand(deleteTransition, {
+      from: "processing",
+      eventId: "missing",
+    });
+    expect(failed).toMatchObject({ ok: false, error: { code: "unknown_id" } });
+    expect(store.getState().machine).toEqual(machine);
+    expect(store.getState().machineRev).toBe(revision + 1);
+  });
+
+  test("dirty extraction asks for exact confirmation and cancellation preserves the edit", async () => {
+    const replacement = deferred<ExtractionResponse>();
+    const client = fakeClient(replacement);
+    const store = createAppStore(client);
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+    store.getState().applyCommand(addTransition, {
+      from: "processing",
+      to: "cancelled",
+      event: { kind: "existing", id: "cancel" },
+    });
+    store.getState().setDraftSpec("A different behavioral spec.");
+
+    await store.getState().extract();
+
+    expect(client.extract).not.toHaveBeenCalled();
+    expect(store.getState().replacementConfirmation).toBe(
+      "Extracting again will replace your edits. Continue?",
+    );
+    const edited = store.getState().machine;
+    store.getState().cancelReplacement();
+    expect(store.getState().machine).toEqual(edited);
+    expect(store.getState().replacementConfirmation).toBeNull();
+
+    await store.getState().extract();
+    const confirmed = store.getState().confirmReplacement();
+    replacement.resolve(orderResponse);
+    await confirmed;
+    expect(client.extract).toHaveBeenCalledWith("A different behavioral spec.");
+    expect(store.getState().dirty).toBe(false);
+  });
+
+  test("dirty cached-sample selection asks for the same confirmation and is reversible", () => {
+    const store = createAppStore(fakeClient());
+    store.setState({ sessionSeq: 1, draftSpec: orderSpec });
+    store.getState().applyExtraction(orderResponse, 1, orderSpec);
+    store.getState().applyCommand(addTransition, {
+      from: "processing",
+      to: "cancelled",
+      event: { kind: "existing", id: "cancel" },
+    });
+
+    store.getState().selectSample("Cached sample");
+    expect(store.getState().replacementConfirmation).toBe(
+      "Extracting again will replace your edits. Continue?",
+    );
+    expect(store.getState().draftSpec).toBe(orderSpec);
+    store.getState().cancelReplacement();
+    expect(store.getState().draftSpec).toBe(orderSpec);
+
+    store.getState().selectSample("Cached sample");
+    void store.getState().confirmReplacement();
+    expect(store.getState()).toMatchObject({
+      draftSpec: "Cached sample",
+      dirty: false,
+      replacementConfirmation: null,
     });
   });
 });

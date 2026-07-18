@@ -7,6 +7,7 @@ export interface StateNodeData extends Record<string, unknown> {
   label: string;
   initial: boolean;
   final: boolean;
+  userAdded: boolean;
 }
 
 export interface GhostNodeData extends Record<string, unknown> {
@@ -15,6 +16,8 @@ export interface GhostNodeData extends Record<string, unknown> {
 
 export interface MachineEdgeData extends Record<string, unknown> {
   label: string;
+  eventId: string;
+  userAdded: boolean;
 }
 
 export interface GhostEdgeData extends Record<string, unknown> {
@@ -61,7 +64,7 @@ export function buildFlowElements(
       id: state.id,
       type: "state",
       position: { x: position.x - width / 2, y: position.y - NODE_HEIGHT / 2 },
-      data: { label: state.id, initial: state.isInitial, final: state.isFinal },
+      data: { label: state.name, initial: state.isInitial, final: state.isFinal, userAdded: state.userAdded === true },
       style: { width, height: NODE_HEIGHT },
       ariaLabel: `${state.isInitial ? "Initial " : ""}${state.isFinal ? "Final " : ""}state ${state.name}`,
     };
@@ -106,7 +109,12 @@ export function buildFlowElements(
       target: transition.to,
       sourceHandle: vertical || backward ? "bottom-source" : "right-source",
       targetHandle: vertical ? "top-target" : backward ? "bottom-target" : "left-target",
-      data: { label: transition.event },
+      data: {
+        label: machine.events.find((event) => event.id === transition.event)?.name ?? transition.event,
+        eventId: transition.event,
+        userAdded: transition.userAdded === true,
+      },
+      deletable: true,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#DDE9F5", width: 17, height: 17 },
     };
   });

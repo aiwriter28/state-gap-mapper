@@ -66,6 +66,9 @@ export function validateMachineShape(machine: Machine): VErr[] {
   const stateIds = new Set<string>();
   machine.states.forEach((state, index) => {
     const idSubject = `states[${index}].id`;
+    if (state.id.length > DOMAIN_LIMITS.idOrName) {
+      errors.push(validationError("too_large", idSubject, `Ids must be at most ${DOMAIN_LIMITS.idOrName} characters.`));
+    }
     if (state.id.trim().length === 0) {
       errors.push(validationError("blank_id", idSubject, "State id must not be blank."));
     } else if (!ID_PATTERN.test(state.id)) {
@@ -86,11 +89,20 @@ export function validateMachineShape(machine: Machine): VErr[] {
         validationError("blank_name", `states[${index}].name`, "State name must not be blank."),
       );
     }
+    if (state.name.length > DOMAIN_LIMITS.idOrName) {
+      errors.push(validationError("too_large", `states[${index}].name`, `Names must be at most ${DOMAIN_LIMITS.idOrName} characters.`));
+    }
+    if (state.evidence.length > DOMAIN_LIMITS.evidence) {
+      errors.push(validationError("too_large", `states[${index}].evidence`, `Evidence has at most ${DOMAIN_LIMITS.evidence} entries.`));
+    }
   });
 
   const eventIds = new Set<string>();
   machine.events.forEach((event, index) => {
     const idSubject = `events[${index}].id`;
+    if (event.id.length > DOMAIN_LIMITS.idOrName) {
+      errors.push(validationError("too_large", idSubject, `Ids must be at most ${DOMAIN_LIMITS.idOrName} characters.`));
+    }
     if (event.id.trim().length === 0) {
       errors.push(validationError("blank_id", idSubject, "Event id must not be blank."));
     } else if (!ID_PATTERN.test(event.id)) {
@@ -111,6 +123,15 @@ export function validateMachineShape(machine: Machine): VErr[] {
         validationError("blank_name", `events[${index}].name`, "Event name must not be blank."),
       );
     }
+    if (event.name.length > DOMAIN_LIMITS.idOrName) {
+      errors.push(validationError("too_large", `events[${index}].name`, `Names must be at most ${DOMAIN_LIMITS.idOrName} characters.`));
+    }
+    if (event.surfaceForms.length > DOMAIN_LIMITS.surfaceForms) {
+      errors.push(validationError("too_large", `events[${index}].surfaceForms`, `Surface forms have at most ${DOMAIN_LIMITS.surfaceForms} entries.`));
+    }
+    if (event.evidence.length > DOMAIN_LIMITS.evidence) {
+      errors.push(validationError("too_large", `events[${index}].evidence`, `Evidence has at most ${DOMAIN_LIMITS.evidence} entries.`));
+    }
   });
 
   const transitionPairs = new Set<string>();
@@ -119,6 +140,9 @@ export function validateMachineShape(machine: Machine): VErr[] {
   );
   machine.transitions.forEach((transition, index) => {
     const subject = `transitions[${index}]`;
+    if (transition.evidence.length > DOMAIN_LIMITS.evidence) {
+      errors.push(validationError("too_large", `${subject}.evidence`, `Evidence has at most ${DOMAIN_LIMITS.evidence} entries.`));
+    }
     if (!stateIds.has(transition.from)) {
       errors.push(
         validationError(

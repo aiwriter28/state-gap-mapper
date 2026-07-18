@@ -22,9 +22,12 @@ export function SpecPane() {
   const error = useStore(appStore, (state) => state.error);
   const viabilityRefusal = useStore(appStore, (state) => state.viabilityRefusal);
   const highlightedEvidence = useStore(appStore, (state) => state.highlightedEvidence);
+  const replacementConfirmation = useStore(appStore, (state) => state.replacementConfirmation);
   const setDraftSpec = useStore(appStore, (state) => state.setDraftSpec);
   const selectSample = useStore(appStore, (state) => state.selectSample);
   const extract = useStore(appStore, (state) => state.extract);
+  const confirmReplacement = useStore(appStore, (state) => state.confirmReplacement);
+  const cancelReplacement = useStore(appStore, (state) => state.cancelReplacement);
   const [editing, setEditing] = useState(false);
 
   const covered = useMemo(() => {
@@ -43,7 +46,12 @@ export function SpecPane() {
   const mapSpec = async () => {
     await extract();
     const result = appStore.getState();
-    if (result.machine !== null && result.viabilityRefusal === null && result.error === null) {
+    if (
+      result.machine !== null &&
+      result.viabilityRefusal === null &&
+      result.error === null &&
+      result.replacementConfirmation === null
+    ) {
       setEditing(false);
     }
   };
@@ -141,6 +149,20 @@ export function SpecPane() {
           </div>
         </div>
       )}
+      {replacementConfirmation !== null ? (
+        <dialog className="replacement-dialog" open aria-labelledby="replacement-dialog-title">
+          <form method="dialog">
+            <h3 id="replacement-dialog-title">Replace your canvas edits?</h3>
+            <p>{replacementConfirmation}</p>
+            <div className="dialog-actions">
+              <button className="dialog-button" type="button" onClick={cancelReplacement}>Keep editing</button>
+              <button className="dialog-button primary" type="button" onClick={() => void confirmReplacement()}>
+                Replace and continue
+              </button>
+            </div>
+          </form>
+        </dialog>
+      ) : null}
     </section>
   );
 }
