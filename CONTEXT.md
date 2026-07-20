@@ -57,3 +57,16 @@ _Avoid_: reject, ignore
 **Test Stub**:
 A Given/When/Then test skeleton generated from an Accepted gap, citing its Evidence. Generated from a template, not by the LLM.
 _Avoid_: test case (it has no expected outcome until a human writes one)
+
+### Files
+
+**Spec File**:
+A local `.txt`, `.md`, or `.markdown` file containing only a Spec. Importing it fills the Spec draft; it is not mapped until the user chooses to do so.
+_Avoid_: upload (the file is not stored remotely)
+
+**Project File**:
+A versioned State Gap Mapper `.json` snapshot used to restore the validated logical project state. Structural Gaps are recomputed from the restored machine; presentation layout is regenerated.
+_Avoid_: generic JSON, exported analysis
+
+**Report**:
+A deterministic `.md` download for people and downstream documentation. It is not a restoration format.
