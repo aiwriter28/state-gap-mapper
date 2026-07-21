@@ -2,6 +2,8 @@
 
 This directory is the single source of truth for the State Gap Mapper video: a reproducible 2:45 Remotion composition built from verified production captures. It covers the product flow, suggestion cascade, live recomputation, GPT-5.6/TypeScript boundary, and Codex collaboration story. Focal camera moves pair each callout with a readable close-up instead of leaving the viewer on a static full-interface frame.
 
+[Watch the published demo on YouTube](https://youtu.be/-kOouhl8B78).
+
 ## Canonical manifest
 
 | Role | Canonical file |

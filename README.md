@@ -4,7 +4,7 @@
 
 Paste a product flow in plain English. State Gap Mapper shows how it behaves, redlines places where the outcome is undefined, connects every finding to the original words, and turns approved decisions into test-ready steps.
 
-[Try the live app](https://state-gap-mapper-build.vercel.app) · [See the 60-second tour](#a-real-example) · [Explore the demo video source](./demo-video/README.md)
+[Watch the 2:45 demo](https://youtu.be/-kOouhl8B78) · [Try the live app](https://state-gap-mapper-build.vercel.app) · [Explore the reproducible demo source](./demo-video/README.md)
 
 ![Three panels showing a checkout Spec, the missing cancellation behavior while Processing, and the human-approved transition to Cancelled with a test stub](./docs/assets/readme/workflow-overview.svg)
 
@@ -129,7 +129,7 @@ Yes. Download a JSON project and reopen it later. You can also download a Markdo
 
 ### Can I reuse the source code?
 
-The repository is publicly viewable, but a reuse license has not yet been added. Do not assume permission to copy, modify, or redistribute it until a license is published.
+The repository is publicly viewable but is not offered under an open-source license. All rights are reserved; do not copy, modify, or redistribute the source without permission.
 
 ## Run it locally
 
