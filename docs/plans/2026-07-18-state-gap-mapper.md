@@ -1,5 +1,10 @@
 # State Gap Mapper Implementation Plan (rev 5: frontend-first design gate added; rev-4 engineering contracts unchanged)
 
+> **Historical planning artifact.** This file records the intended build sequence, not current
+> project status. The application shipped and is live; the unchecked boxes below were simply not
+> maintained during implementation, and the work was completed across multiple Codex sessions.
+> Current behavior is defined by `CONTEXT.md`, the ADRs, the source, and the tests.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Executor note (overrides the usual full-code rule):** this plan is executed inside ONE clean

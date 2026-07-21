@@ -1,38 +1,21 @@
-Copyright (c) 2026 Eric Moore. All rights reserved.
+MIT License
 
-State Gap Mapper is source available, not open source. The source in this
-repository is published so that it can be read, reviewed, and evaluated. No
-open source license is granted.
+Copyright (c) 2026 Eric Moore
 
-Permitted without further permission:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. Viewing, reading, and reviewing this source code.
-2. Cloning the repository and running the application locally for the sole
-   purpose of evaluating it.
-3. Quoting short excerpts of the source in commentary, review, or reporting,
-   with attribution.
-
-Specifically granted for OpenAI Build Week: OpenAI, Devpost, and the judges and
-organizers of the hackathon may access, clone, build, run, test, and evaluate
-this project, and may reproduce screenshots or excerpts of it for the purpose of
-judging, publicizing, and administering the hackathon.
-
-Not permitted without prior written permission from the copyright holder:
-
-1. Redistributing this source code, in original or modified form.
-2. Using this source code, in whole or in part, in another project or product.
-3. Commercial use of any kind.
-4. Creating or distributing derivative works.
-
-Third party dependencies retain their own licenses. Nothing in this file alters
-the terms of any dependency listed in package.json.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-For permission requests beyond the terms above, contact the repository owner
-through GitHub at https://github.com/aiwriter28/state-gap-mapper.
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

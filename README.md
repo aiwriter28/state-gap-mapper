@@ -16,7 +16,7 @@ Feature specs are usually good at describing the happy path. The costly question
 - What happens if an approval is withdrawn after publication begins?
 - What happens when a verification code expires?
 
-State Gap Mapper turns the Spec into a visual behavior map, checks every known state and event combination, and marks the undefined outcomes. A reviewer then decides whether each one is a real omission or an intentional non-transition.
+State Gap Mapper turns the Spec into a visual behavior map, checks every applicable combination of a non-final state and a known event, and marks the undefined outcomes. A reviewer then decides whether each one is a real omission or an intentional non-transition.
 
 The diagram is the explanation surface. Finding missing behavior is the product.
 
@@ -49,7 +49,7 @@ The product decision remains human. State Gap Mapper makes the missing decision 
 
 1. **Paste or import a Spec.** Type plain-English behavior, load a `.txt`, `.md`, or `.markdown` file, or choose one of the three instant samples.
 2. **Map the behavior.** GPT-5.6 extracts the states, events, transitions, and sentence Evidence into an editable diagram.
-3. **Review the redlines.** Deterministic TypeScript checks the complete state-and-event matrix and lists every undefined outcome.
+3. **Review the redlines.** Deterministic TypeScript evaluates the full state-and-event matrix, marks final-state cells as not applicable, and lists every missing transition from a non-final state.
 4. **Make the product decision.** Accept a gap and choose its target, or Dismiss it when the undefined behavior is intentional.
 5. **Use the output.** Copy the generated Test Stub, download a Markdown report, or save a lossless JSON project that can be reopened later.
 
@@ -76,9 +76,40 @@ Red and amber deliberately mean different things. A Structural Gap is a computed
 
 GPT-5.6 handles semantic work: understanding the prose, extracting the machine, ranking the most relevant undefined outcomes, explaining them, and suggesting plausible new events.
 
-Deterministic TypeScript remains authoritative for validation, the complete Structural Gap set, Evidence composition, coverage changes, and Test Stub generation. The model may order the findings. It cannot invent a Structural Gap, remove one, or hide one.
+Deterministic TypeScript remains authoritative for validation, the complete Structural Gap set, Evidence composition, coverage changes, and Test Stub generation. Ranking changes the order, the rationales, and the suggested targets. It cannot invent a Structural Gap in the current map, remove one, or hide one.
+
+Extraction quality still matters, because the model decides the initial states, events, transitions, and final-state flags, and the gap set is computed from that map. That is why the canvas is editable and why sentence coverage is shown: both make the model's reading of the Spec reviewable, and every edit recomputes the gaps deterministically.
 
 Accepting a gap is always a reviewer decision. The application never silently rewrites the product behavior.
+
+## How this was built with Codex and GPT-5.6
+
+The whole repository was built inside the submission window: 47 commits between July 18 and July 21,
+2026, with no pre-existing code.
+
+**Where Codex accelerated the work.** Codex was the implementation partner across the domain model,
+the strict runtime decoders that validate every model response before it reaches the screen, the
+deterministic gap engine, the editable React Flow canvas, the import and export pipeline, production
+debugging, deployment verification, and the reproducible Remotion demo. It wrote the bulk of the 232
+tests across 23 files that guard this behavior.
+
+**Where the human made the call.** The central decision was refusing to let the model find the gaps.
+The obvious build is to ask GPT-5.6 what is missing from a Spec. That version was rejected before it
+was written, because one invented finding in front of a technical reviewer destroys trust in every
+real one. Existence is deterministic and prioritization is the model's job, so the tool can be wrong
+about ordering and never about the facts of a given map. That decision is recorded in
+[ADR 0002](./docs/adr/0002-two-tier-gaps-llm-ranks-never-detects.md), and it is why the interface
+separates red from amber. Product positioning, the refusal behavior on non-viable input, and the
+redline visual language were also human calls.
+
+**What GPT-5.6 does at runtime.** Structured-output extraction of states, events, transitions, and
+sentence Evidence; Relevance ranking with a rationale per gap; target suggestions on Accept; and
+Suggested Events the Spec never mentioned.
+
+**Tooling disclosure.** Codex was the primary implementation partner across multiple interactive
+sessions; the Session ID submitted with this project is the most representative core-build thread.
+Claude Code supported planning, review, and repository hygiene. Human direction set the product
+position, architecture, and design decisions.
 
 ## Who it helps
 
@@ -129,23 +160,27 @@ Yes. Download a JSON project and reopen it later. You can also download a Markdo
 
 ### Can I reuse the source code?
 
-The repository is publicly viewable but is not offered under an open-source license. All rights are reserved; do not copy, modify, or redistribute the source without permission.
+Yes. The project is released under the MIT license, so you are free to use, modify, and redistribute it.
 
 ## Run it locally
 
+Requires Node.js 20.19 or later. The three bundled samples and the complete review workflow need no account and no API key:
+
 ```bash
-cp .env.example .env.local   # add your OPENAI_API_KEY for novel Specs
 npm ci
-npx vercel dev
+npm run dev
 ```
 
-Open the local URL printed by Vercel. The cached samples work without an API call.
+Open the local URL printed by Vite and choose a sample.
 
-## Built with Codex and GPT-5.6
+To map a novel Spec locally, run the serverless API route with an OpenAI API key:
 
-Codex was the implementation partner across the domain model, strict runtime decoders, deterministic gap engine, editable canvas, tests, production debugging, deployment verification, import/export workflow, and Remotion demo.
+```bash
+cp .env.example .env.local   # add your OPENAI_API_KEY
+npx vercel dev --local
+```
 
-Human direction set the product position, architecture records, two-tier honesty model, and redline design language. GPT-5.6 powers structured extraction, Relevance ranking, rationales, target suggestions, and Suggested Events inside the application.
+The `--local` flag starts the dev server without linking a Vercel account. For judging, the hosted app above is the fastest path and needs no setup at all.
 
 ## Technical reference
 
@@ -156,7 +191,6 @@ TypeScript · React · Vite · React Flow · Zustand · OpenAI GPT-5.6 structure
 | [`CONTEXT.md`](./CONTEXT.md) | Product vocabulary and invariants |
 | [`DESIGN.md`](./DESIGN.md) | Binding visual system and component anatomy |
 | [`docs/adr/`](./docs/adr/) | Architecture decisions for the state model, gap engine, and Evidence |
-| [`docs/plans/`](./docs/plans/) | Implementation and public-repository plans |
 | [`demo-video/`](./demo-video/) | Reproducible 2:45 Remotion demo and verified production captures |
 | [`samples/`](./samples/) | The three built-in behavioral Specs and cached results |
 | [`tests/`](./tests/) | Domain, API, store, component, and file-transfer coverage |
@@ -165,4 +199,4 @@ The application is live and production-verified at [state-gap-mapper-build.verce
 
 ## License
 
-Source available, not open source. The code is published to be read, reviewed, run locally, and evaluated. Redistribution, reuse in another project, and commercial use require written permission. OpenAI Build Week judges and organizers are explicitly granted the access they need to build, run, and judge the project. Full terms are in [`LICENSE`](./LICENSE).
+Released under the MIT license. See [`LICENSE`](./LICENSE).
