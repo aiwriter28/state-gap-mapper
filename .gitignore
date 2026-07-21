@@ -44,3 +44,12 @@ Thumbs.db
 .vscode/
 *.swp
 .vercel
+
+# Internal planning and process notes (kept locally, not published)
+HACKATHON.md
+PAST_WINNERS.md
+SUBMISSION_OPTION.md
+.superpowers/
+innovate-runs/
+audit-state-gap-mapper/
+STATE_GAP_MAPPER.md

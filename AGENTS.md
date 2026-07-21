@@ -2,32 +2,24 @@
 
 ## Start here
 
-This repository has two intentional checkouts. Do not infer implementation state from the root
-checkout alone.
+The application lives at the repository root on `main`: `src/`, `lib/`, `api/`, and `tests/`. There
+is no separate implementation checkout.
 
-| Checkout | Branch | Purpose |
-| --- | --- | --- |
-| `/Users/eric/State Gap Mapper` | `main` | Binding product, design, ADR, and planning artifacts |
-| `/Users/eric/State Gap Mapper/.worktrees/state-gap-mapper-build` | `feature/state-gap-mapper-build` | Production application and tests |
+Before changing behavior, read in order:
 
-For implementation work, change into the implementation worktree first. Then read, in order:
-
-1. `.superpowers/sdd/progress.md` for the canonical completion state and commit ranges.
-2. `docs/plans/2026-07-18-state-gap-mapper.md` for the next task contract.
-3. `CONTEXT.md`, `DESIGN_DECISIONS.md`, `DESIGN.md`, and `docs/adr/` before changing behavior.
+1. `CONTEXT.md` for the product vocabulary and invariants.
+2. `docs/adr/` for the decisions that constrain the state model, gap engine, and Evidence.
+3. `DESIGN_DECISIONS.md` and `DESIGN.md` for the binding visual and interaction system.
 4. `git status --short --branch` and recent commits before editing.
 
-The checklist in the implementation plan can lag actual execution. The progress file is the
-authoritative resume point. After completing or reviewing a task, update the progress file in the
-same branch before handing off.
+Verify with `npm run typecheck`, `npm test`, `npm run lint`, and `npm run build`.
 
-## Current snapshot
+## Current status
 
-Last updated on 2026-07-18: Tasks 1 through 13 are complete. The implementation is integrated into
-`main`, deployed at `https://state-gap-mapper-build.vercel.app`, live-verified, and published to the
-public GitHub repository. Task 14, the README, demo video, Devpost package, and final submission,
-is next. Always confirm this against `.superpowers/sdd/progress.md` because the snapshot can become
-stale.
+Shipped. The application is live and production-verified at
+`https://state-gap-mapper-build.vercel.app`, and the source is public at
+`https://github.com/aiwriter28/state-gap-mapper`.
+
 ## Claude compatibility
 
 `CLAUDE.md` is a symlink to this file. Edit `AGENTS.md` only; the symlink keeps Claude and Codex on
