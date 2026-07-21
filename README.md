@@ -84,8 +84,8 @@ Accepting a gap is always a reviewer decision. The application never silently re
 
 ## How this was built with Codex and GPT-5.6
 
-The whole repository was built inside the submission window: 47 commits between July 18 and July 21,
-2026, with no pre-existing code.
+The repository was created from scratch inside the July 18 to July 21, 2026 submission window, with
+no pre-existing code.
 
 **Where Codex accelerated the work.** Codex was the implementation partner across the domain model,
 the strict runtime decoders that validate every model response before it reaches the screen, the
@@ -108,8 +108,9 @@ Suggested Events the Spec never mentioned.
 
 **Tooling disclosure.** Codex was the primary implementation partner across multiple interactive
 sessions; the Session ID submitted with this project is the most representative core-build thread.
-Claude Code supported planning, review, and repository hygiene. Human direction set the product
-position, architecture, and design decisions.
+Claude Code supported initial planning and design, the import and export specification, licensing and
+repository cleanup, and submission assets. Human direction set the product position, architecture,
+and design decisions.
 
 ## Who it helps
 
