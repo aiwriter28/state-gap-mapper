@@ -162,3 +162,7 @@ TypeScript · React · Vite · React Flow · Zustand · OpenAI GPT-5.6 structure
 | [`tests/`](./tests/) | Domain, API, store, component, and file-transfer coverage |
 
 The application is live and production-verified at [state-gap-mapper-build.vercel.app](https://state-gap-mapper-build.vercel.app).
+
+## License
+
+Source available, not open source. The code is published to be read, reviewed, run locally, and evaluated. Redistribution, reuse in another project, and commercial use require written permission. OpenAI Build Week judges and organizers are explicitly granted the access they need to build, run, and judge the project. Full terms are in [`LICENSE`](./LICENSE).
