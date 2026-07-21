@@ -1,0 +1,36 @@
+{
+  "format": "state-gap-mapper-project",
+  "version": 1,
+  "exportedAt": "2026-07-20T12:00:00.000Z",
+  "spec": {
+    "active": "A new order starts in Cart.",
+    "draft": "A new order starts in Cart."
+  },
+  "sentences": [
+    { "index": 1, "text": "A new order starts in Cart." }
+  ],
+  "machine": {
+    "states": [
+      {
+        "id": "cart",
+        "name": "Cart",
+        "isInitial": true,
+        "isFinal": false,
+        "evidence": [1]
+      }
+    ],
+    "events": [],
+    "transitions": []
+  },
+  "canvasEdited": false,
+  "analysis": {
+    "ranks": [],
+    "suggestedEvents": [],
+    "rankTruncated": false
+  },
+  "decisions": {
+    "dismissedPairs": [],
+    "acceptedSuggestedEvents": [],
+    "testStubs": []
+  }
+}

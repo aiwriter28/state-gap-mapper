@@ -10,7 +10,12 @@ import {
   type HoleTarget,
 } from "../lib/commands";
 import { computeGaps } from "../lib/gaps";
-import { mergeRanks } from "../lib/rankMerge";
+import { mergeRanks, orderDisplayHoles } from "../lib/rankMerge";
+import {
+  PROJECT_LIMITS,
+  type ProjectTestStub,
+  type StateGapMapperProjectV1,
+} from "../lib/projectFile";
 import {
   holeEvidence,
   type CachedSample,
@@ -35,13 +40,7 @@ export type { ExtractionResponse, LlmClient, RankResponse } from "./llmClient";
 
 export type ExtractionPhase = "idle" | "extracting";
 
-export interface TestStub {
-  stateId: string;
-  eventId: string;
-  targetStateId: string | null;
-  evidence: number[];
-  text: string;
-}
+export type TestStub = ProjectTestStub;
 
 export interface AppState {
   draftSpec: string;
@@ -70,6 +69,7 @@ export interface AppState {
   commandError: VErr | null;
   replacementConfirmation: string | null;
   replacementIntent: ReplacementIntent | null;
+  editorOpen: boolean;
 }
 
 type ReplacementIntent =
@@ -80,6 +80,9 @@ export const DIRTY_REPLACEMENT_COPY = "Extracting again will replace your edits.
 
 export interface AppActions {
   setDraftSpec(spec: string): void;
+  setEditorOpen(open: boolean): void;
+  importSpecDraft(spec: string): void;
+  hydrateProject(project: StateGapMapperProjectV1): void;
   selectSample(spec: string, cache?: CachedSample): void;
   extract(): Promise<void>;
   applyExtraction(payload: ExtractionResponse, seq: number, submittedSpec?: string): void;
@@ -135,6 +138,7 @@ function initialState(): AppState {
     commandError: null,
     replacementConfirmation: null,
     replacementIntent: null,
+    editorOpen: false,
   };
 }
 
@@ -168,13 +172,12 @@ function visibleDisplayHoles(
   )).filter((hole) => !dismissedPairKeys.has(pairKey(hole)));
 }
 
-function orderDisplayHoles(holes: DisplayHole[]): DisplayHole[] {
-  return [...holes].sort((left, right) => {
-    if (left.rank === null && right.rank !== null) return -1;
-    if (left.rank !== null && right.rank === null) return 1;
-    if (left.rank === null || right.rank === null) return 0;
-    return right.rank.relevance - left.rank.relevance;
-  });
+function applicableRanks(machine: Machine, gaps: Gaps, ranks: RankedHole[]): RankedHole[] {
+  return mergeRanks(
+    gaps.missingTransitions,
+    ranks,
+    new Set(machine.states.map((state) => state.id)),
+  ).flatMap((hole) => hole.rank === null ? [] : [hole.rank]);
 }
 
 function stateCreator(client: LlmClient) {
@@ -193,6 +196,7 @@ function stateCreator(client: LlmClient) {
         dirty: false,
         replacementConfirmation: null,
         replacementIntent: null,
+        editorOpen: true,
       }));
     };
 
@@ -231,6 +235,7 @@ function stateCreator(client: LlmClient) {
         commandError: null,
         replacementConfirmation: null,
         replacementIntent: null,
+        editorOpen: false,
       }));
     };
 
@@ -264,6 +269,49 @@ function stateCreator(client: LlmClient) {
     ...initialState(),
 
     setDraftSpec: (draftSpec) => set({ draftSpec }),
+    setEditorOpen: (editorOpen) => set({ editorOpen }),
+    importSpecDraft: (draftSpec) => set({ draftSpec, editorOpen: true }),
+    hydrateProject: (project) => {
+      const gaps = computeGaps(project.machine);
+      const dismissedPairKeys = new Set(project.decisions.dismissedPairs.map((pair) => pairKey(pair)));
+      const displayHoles = visibleDisplayHoles(
+        project.machine,
+        gaps,
+        project.analysis.ranks,
+        dismissedPairKeys,
+      );
+      set((state) => ({
+        draftSpec: project.spec.draft,
+        activeSpec: project.spec.active,
+        sentences: project.sentences,
+        machine: project.machine,
+        gaps,
+        ranks: applicableRanks(project.machine, gaps, project.analysis.ranks),
+        suggestedEvents: project.analysis.suggestedEvents,
+        displayHoles,
+        rankTruncated: project.analysis.rankTruncated,
+        stubs: project.decisions.testStubs,
+        dismissedPairKeys,
+        acceptedSuggestedEventIds: new Map(project.decisions.acceptedSuggestedEvents.map((entry) => (
+          [entry.suggestionId, entry.acceptedEventId]
+        ))),
+        selectedHoleKey: null,
+        highlightedEvidence: [],
+        viabilityRefusal: null,
+        phase: "idle",
+        error: null,
+        rankError: null,
+        rankPending: false,
+        sessionSeq: state.sessionSeq + 1,
+        rankSeq: state.rankSeq + 1,
+        machineRev: state.machineRev + 1,
+        dirty: project.canvasEdited,
+        commandError: null,
+        replacementConfirmation: null,
+        replacementIntent: null,
+        editorOpen: project.spec.draft !== project.spec.active,
+      }));
+    },
 
     selectSample: (draftSpec, cache) => {
       if (get().dirty) {
@@ -316,6 +364,7 @@ function stateCreator(client: LlmClient) {
         commandError: null,
         replacementConfirmation: null,
         replacementIntent: null,
+        editorOpen: false,
       }));
     },
 
@@ -409,7 +458,7 @@ function stateCreator(client: LlmClient) {
       );
       set({
         gaps,
-        ranks: displayHoles.flatMap((hole) => hole.rank === null ? [] : [hole.rank]),
+        ranks: applicableRanks(current.machine, gaps, payload.rankedHoles),
         suggestedEvents: revisionChanged ? [] : payload.suggestedEvents,
         displayHoles,
         dismissedPairKeys,
@@ -428,6 +477,14 @@ function stateCreator(client: LlmClient) {
     },
     acceptHole: (hole, target) => {
       set({ commandError: null });
+      if (get().stubs.length >= PROJECT_LIMITS.testStubs) {
+        const result: AcceptHoleResult = {
+          ok: false,
+          error: { code: "too_large", subject: "testStubs", message: `A project can contain at most ${PROJECT_LIMITS.testStubs} Test Stubs.` },
+        };
+        set({ commandError: result.error });
+        return result;
+      }
       const current = get().machine;
       if (current === null) {
         const result: AcceptHoleResult = {
@@ -474,6 +531,17 @@ function stateCreator(client: LlmClient) {
     },
     acceptSuggestedEvent: (suggestion) => {
       set({ commandError: null });
+      if (
+        !get().acceptedSuggestedEventIds.has(suggestion.id)
+        && get().acceptedSuggestedEventIds.size >= PROJECT_LIMITS.acceptedSuggestedEvents
+      ) {
+        const result: AcceptSuggestedEventResult = {
+          ok: false,
+          error: { code: "too_large", subject: "acceptedSuggestedEvents", message: `A project can remember at most ${PROJECT_LIMITS.acceptedSuggestedEvents} accepted Suggested Events.` },
+        };
+        set({ commandError: result.error });
+        return result;
+      }
       const current = get().machine;
       if (current === null) {
         const result: AcceptSuggestedEventResult = {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useStore } from "zustand";
 
 import accountSpec from "../../samples/account-signup.txt?raw";
@@ -83,12 +83,13 @@ export function SpecPane() {
   const viabilityRefusal = useStore(appStore, (state) => state.viabilityRefusal);
   const highlightedEvidence = useStore(appStore, (state) => state.highlightedEvidence);
   const replacementConfirmation = useStore(appStore, (state) => state.replacementConfirmation);
+  const editorOpen = useStore(appStore, (state) => state.editorOpen);
   const setDraftSpec = useStore(appStore, (state) => state.setDraftSpec);
   const selectSample = useStore(appStore, (state) => state.selectSample);
   const extract = useStore(appStore, (state) => state.extract);
   const confirmReplacement = useStore(appStore, (state) => state.confirmReplacement);
   const cancelReplacement = useStore(appStore, (state) => state.cancelReplacement);
-  const [editing, setEditing] = useState(false);
+  const setEditorOpen = useStore(appStore, (state) => state.setEditorOpen);
 
   const uncovered = useMemo(() => new Set(
     machine === null
@@ -96,7 +97,7 @@ export function SpecPane() {
       : uncoveredSentences(machine, sentences.length),
   ), [machine, sentences]);
 
-  const showEditor = machine === null || editing || viabilityRefusal !== null;
+  const showEditor = machine === null || editorOpen || viabilityRefusal !== null;
   const isExtracting = phase === "extracting";
 
   const mapSpec = async () => {
@@ -108,13 +109,12 @@ export function SpecPane() {
       result.error === null &&
       result.replacementConfirmation === null
     ) {
-      setEditing(false);
+      setEditorOpen(false);
     }
   };
 
   const chooseSample = (sample: (typeof samples)[number]) => {
     selectSample(sample.spec, sample.cache ?? undefined);
-    setEditing(sample.cache === null);
   };
 
   return (
@@ -127,7 +127,7 @@ export function SpecPane() {
           type="button"
           onClick={() => {
             if (draftSpec.length === 0 && activeSpec.length > 0) setDraftSpec(activeSpec);
-            setEditing(true);
+            setEditorOpen(true);
           }}
         >
           Edit spec

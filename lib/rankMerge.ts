@@ -40,3 +40,13 @@ export function mergeRanks(
     rank: firstRankByKey.get(pairKey(hole)) ?? null,
   }));
 }
+
+/** Matches the UI: Unranked first, then descending Relevance, with stable input ties. */
+export function orderDisplayHoles(holes: DisplayHole[]): DisplayHole[] {
+  return [...holes].sort((left, right) => {
+    if (left.rank === null && right.rank !== null) return -1;
+    if (left.rank !== null && right.rank === null) return 1;
+    if (left.rank === null || right.rank === null) return 0;
+    return right.rank.relevance - left.rank.relevance;
+  });
+}
