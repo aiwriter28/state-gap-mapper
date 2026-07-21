@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560" role="img" aria-labelledby="title desc">
+  <title id="title">State Gap Mapper honesty model</title>
+  <desc id="desc">GPT-5.6 understands and prioritizes the prose while deterministic TypeScript validates the machine and checks every structural gap.</desc>
+  <defs>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.4" fill="#6C89A6" opacity="0.14"/>
+    </pattern>
+    <style>
+      .ui { font-family: Barlow, Inter, Arial, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace; }
+      .eyebrow { font-size: 18px; font-weight: 700; letter-spacing: 2.6px; }
+      .title { font-size: 38px; font-weight: 700; fill: #DDE9F5; }
+      .body { font-size: 23px; fill: #DDE9F5; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="560" rx="24" fill="#0C1B2C"/>
+  <rect x="1" y="1" width="1598" height="558" rx="23" fill="none" stroke="#16304F" stroke-width="2"/>
+  <rect width="1600" height="560" rx="24" fill="url(#dots)"/>
+
+  <text x="52" y="61" class="ui eyebrow" fill="#6C89A6">THE HONESTY MODEL</text>
+  <text x="52" y="112" class="ui title">AI adds judgment. Deterministic code protects completeness.</text>
+
+  <rect x="52" y="151" width="720" height="298" rx="18" fill="#16304F" stroke="#34577A" stroke-width="2"/>
+  <rect x="52" y="151" width="720" height="5" rx="2" fill="#6C89A6"/>
+  <text x="88" y="202" class="ui eyebrow" fill="#9BB1C8">GPT-5.6 / JUDGMENT</text>
+  <text x="88" y="250" class="ui" font-size="31" font-weight="700" fill="#DDE9F5">Understands the feature prose</text>
+  <circle cx="95" cy="302" r="5" fill="#9BB1C8"/>
+  <text x="117" y="310" class="ui body">Extracts states, events, transitions, and evidence</text>
+  <circle cx="95" cy="351" r="5" fill="#9BB1C8"/>
+  <text x="117" y="359" class="ui body">Ranks which undefined outcomes matter most</text>
+  <circle cx="95" cy="400" r="5" fill="#9BB1C8"/>
+  <text x="117" y="408" class="ui body">Suggests events the Spec may have overlooked</text>
+
+  <rect x="828" y="151" width="720" height="298" rx="18" fill="#16304F" stroke="#34577A" stroke-width="2"/>
+  <rect x="828" y="151" width="720" height="5" rx="2" fill="#DDE9F5"/>
+  <text x="864" y="202" class="ui eyebrow" fill="#DDE9F5">TYPESCRIPT / GUARANTEE</text>
+  <text x="864" y="250" class="ui" font-size="31" font-weight="700" fill="#DDE9F5">Checks the complete behavior map</text>
+  <circle cx="871" cy="302" r="5" fill="#DDE9F5"/>
+  <text x="893" y="310" class="ui body">Validates every machine before it reaches the screen</text>
+  <circle cx="871" cy="351" r="5" fill="#DDE9F5"/>
+  <text x="893" y="359" class="ui body">Enumerates every known state and event combination</text>
+  <circle cx="871" cy="400" r="5" fill="#DDE9F5"/>
+  <text x="893" y="408" class="ui body">Recomputes gaps, evidence, coverage, and test stubs</text>
+
+  <rect x="52" y="476" width="1496" height="48" rx="11" fill="#102338" stroke="#34577A"/>
+  <text x="800" y="508" class="mono" font-size="20" fill="#DDE9F5" text-anchor="middle">The model can rank a Structural Gap. It cannot add or hide one.</text>
+</svg>
