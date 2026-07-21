@@ -33,7 +33,7 @@ The Spec never says what cancellation should do while the order is **Processing*
 
 State Gap Mapper therefore shows `processing x cancel` as a red Structural Gap. It attaches sentences 2 and 5 as Evidence, so the reviewer can see exactly why the question exists.
 
-![The current production Structural Gap card for processing by cancel, with a 0.98 Relevance score and evidence from sentences 2 and 5](./docs/assets/readme/current-gap-card.jpg)
+<img src="./docs/assets/readme/current-gap-card.jpg" alt="The current production Structural Gap card for processing by cancel, with a 0.98 Relevance score and evidence from sentences 2 and 5" width="740">
 
 If the reviewer chooses **Cancelled** as the intended target, the red `???` becomes a normal transition and the application drafts:
 
